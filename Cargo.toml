@@ -1,0 +1,17 @@
+[package]
+name = "mprober-lib"
+version = "0.1.0"
+authors = ["Magic Len <len@magiclen.org>"]
+edition = "2018"
+repository = "https://github.com/magiclen/m-prober-lib"
+homepage = "https://magiclen.org/m-prober-lib"
+keywords = ["linux", "proc", "kernel", ""]
+categories = ["os::unix-apis"]
+description= "A library aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes."
+readme = "README.md"
+license = "MIT"
+
+[dependencies]
+libc = "0.2.71"
+scanner-rust = "2.0.6"
+chrono = "0.4.11"
