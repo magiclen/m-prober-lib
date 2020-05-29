@@ -30,8 +30,18 @@ pub struct Free {
 }
 
 /// Get memory information like the `free` command by reading the `/proc/meminfo` file.
+///
+/// ```rust
+/// extern crate mprober_lib;
+///
+/// use mprober_lib::memory;
+///
+/// let free = memory::free().unwrap();
+///
+/// println!("{:#?}", free);
+/// ```
 pub fn free() -> Result<Free, ScannerError> {
-    const USEFUL_ITEMS: [&'static [u8]; 11] = [
+    const USEFUL_ITEMS: [&[u8]; 11] = [
         b"MemTotal",
         b"MemFree",
         b"MemAvailable",

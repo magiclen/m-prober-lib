@@ -7,6 +7,16 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 use chrono::prelude::*;
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file.
+///
+/// ```rust
+/// extern crate mprober_lib;
+///
+/// use mprober_lib::rtc_time;
+///
+/// let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
+///
+/// println!("{}", rtc_date_time);
+/// ```
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
     let mut sc = ScannerAscii::scan_path("/proc/driver/rtc")?;

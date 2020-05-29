@@ -2,6 +2,16 @@ use std::fmt::Write;
 use std::time::Duration;
 
 /// Format a `Duration` to a string. The string would be like `4 hours, 39 minutes, and 25 seconds`.
+///
+/// ```rust
+/// extern crate mprober_lib;
+///
+/// use mprober_lib::uptime;
+///
+/// let uptime = uptime::get_uptime().unwrap();
+///
+/// println!("{}", mprober_lib::format_duration(uptime.total_uptime))
+/// ```
 pub fn format_duration(duration: Duration) -> String {
     let sec = duration.as_secs();
     let days = sec / 86400;

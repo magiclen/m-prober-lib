@@ -7,8 +7,20 @@ use bencher::Bencher;
 
 use mprober_lib::*;
 
-fn get_btime(bencher: &mut Bencher) {
-    bencher.iter(|| btime::get_btime_by_uptime(uptime::get_uptime().unwrap()));
+fn get_cpus(bencher: &mut Bencher) {
+    bencher.iter(|| cpu::get_cpus().unwrap());
+}
+
+fn get_average_cpu_stat(bencher: &mut Bencher) {
+    bencher.iter(|| cpu::get_average_cpu_stat().unwrap());
+}
+
+fn get_all_cpus_stat_with_average(bencher: &mut Bencher) {
+    bencher.iter(|| cpu::get_all_cpus_stat(true).unwrap());
+}
+
+fn get_all_cpus_stat_without_average(bencher: &mut Bencher) {
+    bencher.iter(|| cpu::get_all_cpus_stat(false).unwrap());
 }
 
 fn get_hostname(bencher: &mut Bencher) {
@@ -35,7 +47,13 @@ fn get_uptime(bencher: &mut Bencher) {
     bencher.iter(|| uptime::get_uptime().unwrap());
 }
 
-benchmark_group!(btime, get_btime);
+benchmark_group!(
+    cpu,
+    get_cpus,
+    get_average_cpu_stat,
+    get_all_cpus_stat_with_average,
+    get_all_cpus_stat_without_average
+);
 benchmark_group!(hostname, get_hostname);
 benchmark_group!(kernel, get_kernel_version);
 benchmark_group!(load_average, get_load_average);
@@ -43,4 +61,4 @@ benchmark_group!(memory, free);
 benchmark_group!(rtc_time, get_rtc_date_time);
 benchmark_group!(uptime, get_uptime);
 
-benchmark_main!(btime, hostname, kernel, load_average, memory, rtc_time, uptime);
+benchmark_main!(cpu, hostname, kernel, load_average, memory, rtc_time, uptime);
