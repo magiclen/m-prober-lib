@@ -23,6 +23,10 @@ fn get_load_average(bencher: &mut Bencher) {
     bencher.iter(|| load_average::get_load_average().unwrap());
 }
 
+fn free(bencher: &mut Bencher) {
+    bencher.iter(|| memory::free().unwrap());
+}
+
 fn get_rtc_date_time(bencher: &mut Bencher) {
     bencher.iter(|| rtc_time::get_rtc_date_time().unwrap());
 }
@@ -35,7 +39,8 @@ benchmark_group!(btime, get_btime);
 benchmark_group!(hostname, get_hostname);
 benchmark_group!(kernel, get_kernel_version);
 benchmark_group!(load_average, get_load_average);
+benchmark_group!(memory, free);
 benchmark_group!(rtc_time, get_rtc_date_time);
 benchmark_group!(uptime, get_uptime);
 
-benchmark_main!(btime, hostname, kernel, load_average, rtc_time, uptime);
+benchmark_main!(btime, hostname, kernel, load_average, memory, rtc_time, uptime);
