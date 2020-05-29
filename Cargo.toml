@@ -15,3 +15,8 @@ license = "MIT"
 libc = "0.2.71"
 scanner-rust = "2.0.6"
 chrono = "0.4.11"
+bencher = "0.1.5"
+
+[[bench]]
+name = "bench"
+harness = false

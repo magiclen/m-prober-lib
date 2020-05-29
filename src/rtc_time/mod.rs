@@ -6,7 +6,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 use chrono::prelude::*;
 
-/// Get the uptime by reading the `/sys/class/rtc/rtc0/date` file and the `/sys/class/rtc/rtc0/time` file.
+/// Get the RTC datetime by reading the `/sys/class/rtc/rtc0/date` file and the `/sys/class/rtc/rtc0/time` file.
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
     let rtc_date = {
