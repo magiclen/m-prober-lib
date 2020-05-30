@@ -3,6 +3,7 @@ extern crate chrono;
 use std::io::ErrorKind;
 use std::time::{Duration, SystemTime};
 
+use crate::scanner_rust::generic_array::typenum::U24;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 use chrono::prelude::*;
@@ -45,7 +46,7 @@ impl Uptime {
 /// ```
 #[inline]
 pub fn get_uptime() -> Result<Uptime, ScannerError> {
-    let mut sc = ScannerAscii::scan_path("/proc/uptime")?;
+    let mut sc: ScannerAscii<_, U24> = ScannerAscii::scan_path2("/proc/uptime")?;
 
     let uptime = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
     let idle_time = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;

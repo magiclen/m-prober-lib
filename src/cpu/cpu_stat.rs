@@ -2,7 +2,9 @@ use std::io::ErrorKind;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::scanner_rust::generic_array::typenum::{U72, U1024};
 use crate::cpu::CPUTime;
+
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Debug, Clone)]
@@ -89,7 +91,7 @@ impl CPUStat {
 /// println!("{:#?}", average_cpu_stat);
 /// ```
 pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
-    let mut sc = ScannerAscii::scan_path("/proc/stat")?;
+    let mut sc: ScannerAscii<_, U72> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
 
@@ -134,7 +136,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
 /// println!("{:#?}", all_cpus_stat);
 /// ```
 pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerError> {
-    let mut sc = ScannerAscii::scan_path("/proc/stat")?;
+    let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let mut cpus_stat = Vec::with_capacity(1);
 

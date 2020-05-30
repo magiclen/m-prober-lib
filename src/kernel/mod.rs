@@ -1,5 +1,6 @@
 use std::io::ErrorKind;
 
+use crate::scanner_rust::generic_array::typenum::U48;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 /// Get the kernel version by reading the `/proc/version` file.
@@ -15,7 +16,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 /// ```
 #[inline]
 pub fn get_kernel_version() -> Result<String, ScannerError> {
-    let mut sc = ScannerAscii::scan_path("/proc/version")?;
+    let mut sc: ScannerAscii<_, U48> = ScannerAscii::scan_path2("/proc/version")?;
 
     sc.drop_next_bytes(14)?.ok_or(ErrorKind::UnexpectedEof)?;
 

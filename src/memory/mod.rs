@@ -1,5 +1,6 @@
 use std::io::ErrorKind;
 
+use crate::scanner_rust::generic_array::typenum::U768;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Debug, Clone)]
@@ -55,7 +56,7 @@ pub fn free() -> Result<Free, ScannerError> {
         b"SUnreclaim",
     ];
 
-    let mut sc = ScannerAscii::scan_path("/proc/meminfo")?;
+    let mut sc: ScannerAscii<_, U768> = ScannerAscii::scan_path2("/proc/meminfo")?;
 
     let mut item_values = [0usize; USEFUL_ITEMS.len()];
 

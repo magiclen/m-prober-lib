@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::io::ErrorKind;
 use std::str::from_utf8_unchecked;
 
+use crate::scanner_rust::generic_array::typenum::U1024;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Debug, Clone)]
@@ -33,7 +34,7 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
     const SIBLINGS_INDEX: usize = 3;
     const CPU_CORES: usize = 4;
 
-    let mut sc = ScannerAscii::scan_path("/proc/cpuinfo")?;
+    let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/cpuinfo")?;
 
     let mut cpus = Vec::with_capacity(1);
     let mut physical_ids: BTreeSet<usize> = BTreeSet::new();

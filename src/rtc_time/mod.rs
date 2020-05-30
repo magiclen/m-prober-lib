@@ -2,6 +2,7 @@ extern crate chrono;
 
 use std::io::ErrorKind;
 
+use crate::scanner_rust::generic_array::typenum::U52;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 use chrono::prelude::*;
@@ -19,7 +20,7 @@ use chrono::prelude::*;
 /// ```
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
-    let mut sc = ScannerAscii::scan_path("/proc/driver/rtc")?;
+    let mut sc: ScannerAscii<_, U52> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
 
     sc.drop_next_bytes("rtc_time".len())?.ok_or(ErrorKind::UnexpectedEof)?;
     sc.drop_next_until(": ")?.ok_or(ErrorKind::UnexpectedEof)?;
