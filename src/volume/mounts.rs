@@ -34,7 +34,7 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
 
                     device_path.file_name().unwrap().to_string_lossy().into_owned()
                 } else {
-                    unsafe { from_utf8_unchecked(device_path.as_ref()) }.to_string()
+                    unsafe { from_utf8_unchecked(device) }.to_string()
                 }
             };
 
