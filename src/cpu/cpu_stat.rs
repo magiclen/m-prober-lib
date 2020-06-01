@@ -2,8 +2,8 @@ use std::io::ErrorKind;
 use std::thread::sleep;
 use std::time::Duration;
 
-use crate::scanner_rust::generic_array::typenum::{U72, U1024};
 use crate::cpu::CPUTime;
+use crate::scanner_rust::generic_array::typenum::{U1024, U72};
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
@@ -68,7 +68,7 @@ impl CPUStat {
     /// println!("{:.2}%", cpu_percentage * 100.0);
     /// ```
     #[inline]
-    pub fn compute_cpu_utilization_in_percentage(self, cpu_stat_after_this: &CPUStat) -> f64 {
+    pub fn compute_cpu_utilization_in_percentage(&self, cpu_stat_after_this: &CPUStat) -> f64 {
         let pre_cpu_time = self.compute_cpu_time();
         let cpu_time = cpu_stat_after_this.compute_cpu_time();
 

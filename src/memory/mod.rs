@@ -69,7 +69,7 @@ pub fn free() -> Result<Free, ScannerError> {
 
                 item_values[i] = value * 1024;
 
-                sc.drop_next()?;
+                sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
 
                 break;
             } else {
