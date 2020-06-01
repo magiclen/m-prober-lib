@@ -13,5 +13,6 @@ pub mod network;
 pub mod process;
 pub mod rtc_time;
 pub mod uptime;
+pub mod volume;
 
 pub use functions::*;

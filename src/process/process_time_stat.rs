@@ -2,7 +2,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use crate::scanner_rust::generic_array::typenum::U96;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 use crate::process::ProcessStat;
 
@@ -88,7 +88,7 @@ impl From<ProcessStat> for ProcessTimeStat {
 pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
 
-    let mut sc: ScannerAscii<_, U96> = ScannerAscii::scan_path2(stat_path)?;
+    let mut sc: Scanner<_, U96> = Scanner::scan_path2(stat_path)?;
 
     sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
 

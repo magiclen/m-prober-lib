@@ -5,7 +5,7 @@ use std::path::Path;
 use std::str::from_utf8_unchecked;
 
 use crate::scanner_rust::generic_array::typenum::{U192, U32};
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 use crate::process::ProcessState;
 
@@ -58,7 +58,7 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
 
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
 
-    let mut sc: ScannerAscii<_, U192> = ScannerAscii::scan_path2(stat_path)?;
+    let mut sc: Scanner<_, U192> = Scanner::scan_path2(stat_path)?;
 
     sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
 
@@ -75,8 +75,10 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
         }
     }
 
-    stat.state = ProcessState::from_str(sc.next()?.ok_or(ErrorKind::UnexpectedEof)?)
-        .ok_or(ErrorKind::InvalidData)?;
+    stat.state = ProcessState::from_str(unsafe {
+        from_utf8_unchecked(&sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?)
+    })
+    .ok_or(ErrorKind::InvalidData)?;
 
     stat.ppid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
     stat.pgrp = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
@@ -127,7 +129,7 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
 
     let statm_path = Path::new("/proc").join(pid.to_string()).join("statm");
 
-    let mut sc: ScannerAscii<_, U32> = ScannerAscii::scan_path2(statm_path)?;
+    let mut sc: Scanner<_, U32> = Scanner::scan_path2(statm_path)?;
 
     for _ in 0..2 {
         sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
