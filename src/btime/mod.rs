@@ -18,13 +18,13 @@ use chrono::prelude::*;
 /// println!("{}", btime);
 /// ```
 #[inline]
-pub fn get_btime() -> &'static DateTime<Utc> {
+pub fn get_btime() -> DateTime<Utc> {
     static START: Once = Once::new();
     static mut BTIME: Option<DateTime<Utc>> = None;
 
     unsafe {
         START.call_once(|| BTIME = Some(get_uptime().unwrap().get_btime()));
 
-        BTIME.as_ref().unwrap()
+        BTIME.unwrap()
     }
 }

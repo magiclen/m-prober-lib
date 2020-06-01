@@ -163,8 +163,8 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let rss_shared = stat.shared;
     let rss_anon = stat.rss_anon;
 
-    let start_time = get_btime().clone()
-        + chrono::Duration::from_std(Duration::from_millis(stat.starttime)).unwrap();
+    let start_time =
+        get_btime() + chrono::Duration::from_std(Duration::from_millis(stat.starttime)).unwrap();
 
     let process = Process {
         pid,

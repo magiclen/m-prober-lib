@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 mod process;
 mod process_filter;
 mod process_stat;
