@@ -1,17 +1,32 @@
 use std::collections::BTreeSet;
+use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;
 use std::str::from_utf8_unchecked;
 
 use crate::scanner_rust::generic_array::typenum::U1024;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct CPU {
     pub physical_id: usize,
     pub model_name: String,
     pub cpus_mhz: Vec<f64>,
     pub siblings: usize,
     pub cpu_cores: usize,
+}
+
+impl Hash for CPU {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.physical_id.hash(state)
+    }
+}
+
+impl PartialEq for CPU {
+    #[inline]
+    fn eq(&self, other: &CPU) -> bool {
+        self.physical_id.eq(&other.physical_id)
+    }
 }
 
 /// Get CPU information by reading the `/proc/cpuinfo` file.

@@ -15,7 +15,10 @@ license = "MIT"
 libc = "0.2.71"
 scanner-rust = "2.0.8"
 chrono = "0.4.11"
+regex = "1"
 bencher = "0.1.5"
+
+page_size = "0.4.2"
 
 [[bench]]
 name = "bench"

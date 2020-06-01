@@ -11,7 +11,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 pub use network_stat::*;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Default, Debug, Clone, Eq)]
 pub struct Network {
     pub interface: String,
     pub stat: NetworkStat,

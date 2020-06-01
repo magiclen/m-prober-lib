@@ -3,11 +3,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use crate::cpu::CPUTime;
-use crate::scanner_rust::generic_array::typenum::{U1024, U72};
 
+use crate::scanner_rust::generic_array::typenum::{U1024, U72};
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct CPUStat {
     pub user: u64,
     pub nice: u64,

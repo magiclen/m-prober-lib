@@ -8,7 +8,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 use chrono::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Uptime {
     pub total_uptime: Duration,
     pub all_cpu_idle_time: Duration,
@@ -25,7 +25,7 @@ impl Uptime {
     /// let uptime = uptime::get_uptime().unwrap();
     /// let btime = uptime.get_btime();
     ///
-    /// println!("{}12133123", btime);
+    /// println!("{}", btime);
     /// ```
     #[inline]
     pub fn get_btime(&self) -> DateTime<Utc> {

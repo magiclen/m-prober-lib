@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct NetworkSpeed {
     pub receive: f64,
     pub transmit: f64,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct NetworkStat {
     pub receive_bytes: u64,
     pub transmit_bytes: u64,

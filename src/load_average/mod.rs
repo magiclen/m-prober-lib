@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use crate::scanner_rust::generic_array::typenum::U24;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct LoadAverage {
     pub one: f64,
     pub five: f64,

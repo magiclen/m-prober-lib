@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use crate::scanner_rust::generic_array::typenum::U768;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Mem {
     pub total: usize,
     /// total - free - buffers - cached - total_cached; total_cached = cached + slab - s_unreclaim
@@ -15,7 +15,7 @@ pub struct Mem {
     pub available: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Swap {
     pub total: usize,
     /// swap_total - swap_free - swap_cached
@@ -24,7 +24,7 @@ pub struct Swap {
     pub cache: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Free {
     pub mem: Mem,
     pub swap: Swap,
