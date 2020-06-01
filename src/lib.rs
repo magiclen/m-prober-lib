@@ -1,5 +1,6 @@
 extern crate libc;
-extern crate scanner_rust;
+
+pub extern crate scanner_rust;
 
 mod functions;
 
@@ -16,3 +17,5 @@ pub mod uptime;
 pub mod volume;
 
 pub use functions::*;
+
+pub use scanner_rust::ScannerError;
