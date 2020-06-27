@@ -1,6 +1,6 @@
 [package]
 name = "mprober-lib"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober-lib"
@@ -10,6 +10,7 @@ categories = ["os::unix-apis"]
 description= "A library aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes."
 readme = "README.md"
 license = "MIT"
+include = ["src/**/*", "Cargo.toml", "benches/bench.rs"]
 
 [dependencies]
 libc = "0.2.71"
