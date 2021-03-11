@@ -41,8 +41,8 @@ impl CPUStat {
         let non_idle = self.user + self.nice + self.system + self.irq + self.softirq + self.steal;
 
         CPUTime {
-            idle,
             non_idle,
+            idle,
         }
     }
 

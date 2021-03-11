@@ -179,11 +179,11 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         real_time_priority,
         nice,
         threads,
-        start_time,
         vsz,
         rss,
         rss_shared,
         rss_anon,
+        start_time,
     };
 
     Ok(Some((process, stat)))

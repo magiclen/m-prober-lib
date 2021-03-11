@@ -6,6 +6,7 @@ use std::str::from_utf8_unchecked;
 use crate::scanner_rust::generic_array::typenum::U1024;
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
 pub struct CPU {
     pub physical_id: usize,
