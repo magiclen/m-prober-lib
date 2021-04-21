@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;
-use std::mem::replace;
+use std::mem::take;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -123,7 +123,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let effective_gid = status.effective_gid;
     let state = stat.state;
     let ppid = stat.ppid;
-    let program = replace(&mut stat.comm, String::new());
+    let program = take(&mut stat.comm);
 
     let tty = {
         match stat.tty_nr_major {
