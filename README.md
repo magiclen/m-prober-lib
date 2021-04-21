@@ -1,7 +1,7 @@
 M Prober Lib
 ====================
 
-[![Build Status](https://travis-ci.org/magiclen/m-prober-lib.svg?branch=master)](https://travis-ci.org/magiclen/m-prober-lib)
+[![CI](https://github.com/magiclen/m-prober-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/m-prober-lib/actions/workflows/ci.yml)
 
 This crate aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes.
 
