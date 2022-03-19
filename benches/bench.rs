@@ -8,7 +8,7 @@ use bencher::Bencher;
 use mprober_lib::*;
 
 fn get_btime(bencher: &mut Bencher) {
-    bencher.iter(|| btime::get_btime());
+    bencher.iter(btime::get_btime);
 }
 
 fn get_cpus(bencher: &mut Bencher) {

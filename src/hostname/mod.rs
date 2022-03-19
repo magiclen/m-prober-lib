@@ -19,6 +19,7 @@ pub fn get_hostname() -> Result<String, ScannerError> {
 
     let mut buffer: Vec<u8> = Vec::with_capacity(buffer_size);
 
+    #[allow(clippy::uninit_vec)]
     unsafe {
         buffer.set_len(buffer_size);
     }
