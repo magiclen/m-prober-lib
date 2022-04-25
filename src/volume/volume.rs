@@ -113,9 +113,9 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 
                 volumes.push(volume);
             }
-
-            sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
         }
+
+        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
     }
 
     Ok(volumes)
