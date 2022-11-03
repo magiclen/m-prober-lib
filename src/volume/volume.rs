@@ -93,8 +93,8 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                     }
 
                     (
-                        stats.f_bsize as u64 * stats.f_blocks as u64,
-                        stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64,
+                        stats.f_bsize * stats.f_blocks,
+                        stats.f_bsize * (stats.f_blocks - stats.f_bavail),
                     )
                 };
 
