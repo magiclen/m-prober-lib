@@ -92,6 +92,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                         return Err(io::Error::last_os_error().into());
                     }
 
+                    #[allow(clippy::unnecessary_cast)]
                     (
                         stats.f_bsize as u64 * stats.f_blocks as u64,
                         stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64,
