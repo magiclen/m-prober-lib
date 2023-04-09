@@ -1,10 +1,9 @@
-use std::io::ErrorKind;
-use std::path::Path;
+use std::{io::ErrorKind, path::Path};
 
-use crate::scanner_rust::generic_array::typenum::U96;
-use crate::scanner_rust::{Scanner, ScannerError};
-
-use crate::process::ProcessStat;
+use crate::{
+    process::ProcessStat,
+    scanner_rust::{generic_array::typenum::U96, Scanner, ScannerError},
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessTimeStat {
@@ -18,11 +17,9 @@ impl ProcessTimeStat {
     /// ```rust
     /// extern crate mprober_lib;
     ///
-    /// use std::thread::sleep;
-    /// use std::time::Duration;
+    /// use std::{thread::sleep, time::Duration};
     ///
-    /// use mprober_lib::cpu;
-    /// use mprober_lib::process;
+    /// use mprober_lib::{cpu, process};
     ///
     /// let pre_average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
     /// let pre_process_time_stat = process::get_process_time_stat(1).unwrap();
@@ -36,11 +33,15 @@ impl ProcessTimeStat {
     ///     let pre_average_cpu_time = pre_average_cpu_stat.compute_cpu_time();
     ///     let average_cpu_time = average_cpu_stat.compute_cpu_time();
     ///
-    ///     (average_cpu_time.get_total_time() - pre_average_cpu_time.get_total_time()) as f64
+    ///     (average_cpu_time.get_total_time()
+    ///         - pre_average_cpu_time.get_total_time()) as f64
     /// };
     ///
     /// let cpu_percentage = pre_process_time_stat
-    ///     .compute_cpu_utilization_in_percentage(&process_time_stat, total_cpu_time_f64);
+    ///     .compute_cpu_utilization_in_percentage(
+    ///         &process_time_stat,
+    ///         total_cpu_time_f64,
+    ///     );
     ///
     /// println!("{:.2}%", cpu_percentage * 100.0);
     /// ```
@@ -68,8 +69,7 @@ impl From<ProcessStat> for ProcessTimeStat {
     #[inline]
     fn from(process_stat: ProcessStat) -> Self {
         ProcessTimeStat {
-            utime: process_stat.utime,
-            stime: process_stat.stime,
+            utime: process_stat.utime, stime: process_stat.stime
         }
     }
 }

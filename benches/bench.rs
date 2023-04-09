@@ -4,7 +4,6 @@ extern crate mprober_lib;
 extern crate bencher;
 
 use bencher::Bencher;
-
 use mprober_lib::*;
 
 fn get_btime(bencher: &mut Bencher) {

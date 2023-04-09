@@ -1,17 +1,16 @@
 use std::io::ErrorKind;
 
-use crate::scanner_rust::generic_array::typenum::U768;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U768, ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Mem {
-    pub total: usize,
+    pub total:     usize,
     /// total - free - buffers - cached - total_cached; total_cached = cached + slab - s_unreclaim
-    pub used: usize,
-    pub free: usize,
-    pub shared: usize,
-    pub buffers: usize,
-    pub cache: usize,
+    pub used:      usize,
+    pub free:      usize,
+    pub shared:    usize,
+    pub buffers:   usize,
+    pub cache:     usize,
     pub available: usize,
 }
 
@@ -19,14 +18,14 @@ pub struct Mem {
 pub struct Swap {
     pub total: usize,
     /// swap_total - swap_free - swap_cached
-    pub used: usize,
-    pub free: usize,
+    pub used:  usize,
+    pub free:  usize,
     pub cache: usize,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct Free {
-    pub mem: Mem,
+    pub mem:  Mem,
     pub swap: Swap,
 }
 
@@ -104,8 +103,8 @@ pub fn free() -> Result<Free, ScannerError> {
 
     let swap = Swap {
         total: swap_total,
-        used: swap_total - swap_free - swap_cached,
-        free: swap_free,
+        used:  swap_total - swap_free - swap_cached,
+        free:  swap_free,
         cache: swap_cached,
     };
 

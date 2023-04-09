@@ -1,23 +1,24 @@
-use std::io::ErrorKind;
-use std::thread::sleep;
-use std::time::Duration;
+use std::{io::ErrorKind, thread::sleep, time::Duration};
 
-use crate::cpu::CPUTime;
-
-use crate::scanner_rust::generic_array::typenum::{U1024, U72};
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{
+    cpu::CPUTime,
+    scanner_rust::{
+        generic_array::typenum::{U1024, U72},
+        ScannerAscii, ScannerError,
+    },
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct CPUStat {
-    pub user: u64,
-    pub nice: u64,
-    pub system: u64,
-    pub idle: u64,
-    pub iowait: u64,
-    pub irq: u64,
-    pub softirq: u64,
-    pub steal: u64,
-    pub guest: u64,
+    pub user:       u64,
+    pub nice:       u64,
+    pub system:     u64,
+    pub idle:       u64,
+    pub iowait:     u64,
+    pub irq:        u64,
+    pub softirq:    u64,
+    pub steal:      u64,
+    pub guest:      u64,
     pub guest_nice: u64,
 }
 
@@ -51,8 +52,7 @@ impl CPUStat {
     /// ```rust
     /// extern crate mprober_lib;
     ///
-    /// use std::thread::sleep;
-    /// use std::time::Duration;
+    /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::cpu;
     ///
@@ -62,8 +62,8 @@ impl CPUStat {
     ///
     /// let average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
     ///
-    /// let cpu_percentage =
-    ///     pre_average_cpu_stat.compute_cpu_utilization_in_percentage(&average_cpu_stat);
+    /// let cpu_percentage = pre_average_cpu_stat
+    ///     .compute_cpu_utilization_in_percentage(&average_cpu_stat);
     ///
     /// println!("{:.2}%", cpu_percentage * 100.0);
     /// ```
@@ -222,8 +222,10 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerErro
 ///
 /// use mprober_lib::cpu;
 ///
-/// let cpu_percentage =
-///     cpu::get_average_cpu_utilization_in_percentage(Duration::from_millis(100)).unwrap();
+/// let cpu_percentage = cpu::get_average_cpu_utilization_in_percentage(
+///     Duration::from_millis(100),
+/// )
+/// .unwrap();
 ///
 /// println!("{:.2}%", cpu_percentage * 100.0);
 /// ```
@@ -248,11 +250,14 @@ pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f
 /// use mprober_lib::cpu;
 ///
 /// let all_cpu_percentage_without_average: Vec<String> =
-///     cpu::get_all_cpu_utilization_in_percentage(false, Duration::from_millis(100))
-///         .unwrap()
-///         .into_iter()
-///         .map(|cpu_percentage| format!("{:.2}%", cpu_percentage * 100.0))
-///         .collect();
+///     cpu::get_all_cpu_utilization_in_percentage(
+///         false,
+///         Duration::from_millis(100),
+///     )
+///     .unwrap()
+///     .into_iter()
+///     .map(|cpu_percentage| format!("{:.2}%", cpu_percentage * 100.0))
+///     .collect();
 ///
 /// println!("{:#?}", all_cpu_percentage_without_average);
 /// ```

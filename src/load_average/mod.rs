@@ -1,12 +1,11 @@
 use std::io::ErrorKind;
 
-use crate::scanner_rust::generic_array::typenum::U24;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U24, ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct LoadAverage {
-    pub one: f64,
-    pub five: f64,
+    pub one:     f64,
+    pub five:    f64,
     pub fifteen: f64,
     // Not include the numbers of active/total scheduled entities and the last created PID.
 }

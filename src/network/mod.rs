@@ -1,20 +1,21 @@
 mod network_stat;
 
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-use std::io::ErrorKind;
-use std::thread::sleep;
-use std::time::Duration;
-
-use crate::scanner_rust::generic_array::typenum::U1024;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use std::{
+    collections::HashSet,
+    hash::{Hash, Hasher},
+    io::ErrorKind,
+    thread::sleep,
+    time::Duration,
+};
 
 pub use network_stat::*;
+
+use crate::scanner_rust::{generic_array::typenum::U1024, ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone, Eq)]
 pub struct Network {
     pub interface: String,
-    pub stat: NetworkStat,
+    pub stat:      NetworkStat,
 }
 
 impl Hash for Network {
@@ -89,7 +90,8 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 ///
 /// use mprober_lib::network;
 ///
-/// let networks_with_speed = network::get_networks_with_speed(Duration::from_millis(100)).unwrap();
+/// let networks_with_speed =
+///     network::get_networks_with_speed(Duration::from_millis(100)).unwrap();
 ///
 /// for (network, network_speed) in networks_with_speed {
 ///     println!("{}: ", network.interface);

@@ -1,10 +1,6 @@
-use std::collections::HashMap;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::str::from_utf8_unchecked;
+use std::{collections::HashMap, io::ErrorKind, path::Path, str::from_utf8_unchecked};
 
-use crate::scanner_rust::generic_array::typenum::U1024;
-use crate::scanner_rust::{Scanner, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U1024, Scanner, ScannerError};
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file.
 ///
@@ -45,10 +41,10 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
             match mounts.get_mut(&device) {
                 Some(devices) => {
                     devices.push(point);
-                }
+                },
                 None => {
                     mounts.insert(device, vec![point]);
-                }
+                },
             }
         }
 

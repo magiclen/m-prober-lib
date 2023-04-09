@@ -2,10 +2,9 @@ extern crate chrono;
 
 use std::io::ErrorKind;
 
-use crate::scanner_rust::generic_array::typenum::U52;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
-
 use chrono::prelude::*;
+
+use crate::scanner_rust::{generic_array::typenum::U52, ScannerAscii, ScannerError};
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file.
 ///
@@ -37,7 +36,7 @@ pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
     let date = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
 
     Ok(NaiveDateTime::new(
-        NaiveDate::from_ymd(year, month, date),
-        NaiveTime::from_hms(hour, minute, second),
+        NaiveDate::from_ymd_opt(year, month, date).unwrap(),
+        NaiveTime::from_hms_opt(hour, minute, second).unwrap(),
     ))
 }

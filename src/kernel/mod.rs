@@ -1,7 +1,6 @@
 use std::io::ErrorKind;
 
-use crate::scanner_rust::generic_array::typenum::U48;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U48, ScannerAscii, ScannerError};
 
 /// Get the kernel version by reading the `/proc/version` file.
 ///

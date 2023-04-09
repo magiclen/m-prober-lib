@@ -1,45 +1,46 @@
 extern crate page_size;
 
-use std::io::ErrorKind;
-use std::path::Path;
-use std::str::from_utf8_unchecked;
-
-use crate::scanner_rust::generic_array::typenum::{U192, U32};
-use crate::scanner_rust::{Scanner, ScannerError};
-
-use crate::process::ProcessState;
+use std::{io::ErrorKind, path::Path, str::from_utf8_unchecked};
 
 use page_size::get as get_page_size;
 
+use crate::{
+    process::ProcessState,
+    scanner_rust::{
+        generic_array::typenum::{U192, U32},
+        Scanner, ScannerError,
+    },
+};
+
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStat {
-    pub state: ProcessState,
-    pub comm: String,
-    pub ppid: u32,
-    pub pgrp: u32,
-    pub session: u32,
+    pub state:        ProcessState,
+    pub comm:         String,
+    pub ppid:         u32,
+    pub pgrp:         u32,
+    pub session:      u32,
     pub tty_nr_major: u8,
     pub tty_nr_minor: u32,
-    pub tpgid: Option<u32>,
-    pub utime: u32,
-    pub stime: u32,
-    pub cutime: u32,
-    pub cstime: u32,
-    pub priority: i8,
-    pub nice: i8,
-    pub num_threads: usize,
-    pub starttime: u64,
+    pub tpgid:        Option<u32>,
+    pub utime:        u32,
+    pub stime:        u32,
+    pub cutime:       u32,
+    pub cstime:       u32,
+    pub priority:     i8,
+    pub nice:         i8,
+    pub num_threads:  usize,
+    pub starttime:    u64,
     /// size, VmSize (total program size)
-    pub vsize: usize,
+    pub vsize:        usize,
     /// resident, VmRSS (resident set size)
-    pub rss: usize,
-    pub rsslim: usize,
-    pub processor: usize,
-    pub rt_priority: u8,
+    pub rss:          usize,
+    pub rsslim:       usize,
+    pub processor:    usize,
+    pub rt_priority:  u8,
     /// RssFile + RssShmem (resident shared size)
-    pub shared: usize,
+    pub shared:       usize,
     /// VmRSS - RssFile - RssShmem = RssAnon (resident anonymous memory, process occupied memory)
-    pub rss_anon: usize,
+    pub rss_anon:     usize,
 }
 
 /// Get the stat of a specific process found by ID by reading the `/proc/PID/stat` file and the `/proc/PID/statm` file.

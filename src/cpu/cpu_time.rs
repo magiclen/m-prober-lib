@@ -1,7 +1,7 @@
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CPUTime {
     pub non_idle: u64,
-    pub idle: u64,
+    pub idle:     u64,
 }
 
 impl CPUTime {

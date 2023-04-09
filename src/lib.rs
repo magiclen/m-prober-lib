@@ -49,5 +49,4 @@ pub mod uptime;
 pub mod volume;
 
 pub use functions::*;
-
 pub use scanner_rust::ScannerError;

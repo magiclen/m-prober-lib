@@ -2,13 +2,13 @@ use std::time::Duration;
 
 #[derive(Default, Debug, Clone)]
 pub struct VolumeSpeed {
-    pub read: f64,
+    pub read:  f64,
     pub write: f64,
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeStat {
-    pub read_bytes: u64,
+    pub read_bytes:  u64,
     pub write_bytes: u64,
 }
 
@@ -18,8 +18,7 @@ impl VolumeStat {
     /// ```rust
     /// extern crate mprober_lib;
     ///
-    /// use std::thread::sleep;
-    /// use std::time::Duration;
+    /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::volume;
     ///
@@ -32,7 +31,8 @@ impl VolumeStat {
     /// let volumes = volume::get_volumes().unwrap();
     ///
     /// if !pre_volumes.is_empty() && !volumes.is_empty() {
-    ///     let volume_speed = pre_volumes[0].stat.compute_speed(&volumes[0].stat, interval);
+    ///     let volume_speed =
+    ///         pre_volumes[0].stat.compute_speed(&volumes[0].stat, interval);
     ///
     ///     println!("Read: {:.1} B/s", volume_speed.read);
     ///     println!("Write: {:.1} B/s", volume_speed.write);

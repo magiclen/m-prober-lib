@@ -2,13 +2,13 @@ use std::time::Duration;
 
 #[derive(Default, Debug, Clone)]
 pub struct NetworkSpeed {
-    pub receive: f64,
+    pub receive:  f64,
     pub transmit: f64,
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct NetworkStat {
-    pub receive_bytes: u64,
+    pub receive_bytes:  u64,
     pub transmit_bytes: u64,
 }
 
@@ -18,8 +18,7 @@ impl NetworkStat {
     /// ```rust
     /// extern crate mprober_lib;
     ///
-    /// use std::thread::sleep;
-    /// use std::time::Duration;
+    /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::network;
     ///
@@ -32,7 +31,8 @@ impl NetworkStat {
     /// let networks = network::get_networks().unwrap();
     ///
     /// if !pre_networks.is_empty() && !networks.is_empty() {
-    ///     let network_speed = pre_networks[0].stat.compute_speed(&networks[0].stat, interval);
+    ///     let network_speed =
+    ///         pre_networks[0].stat.compute_speed(&networks[0].stat, interval);
     ///
     ///     println!("Receive: {:.1} B/s", network_speed.receive);
     ///     println!("Transmit: {:.1} B/s", network_speed.transmit);

@@ -1,19 +1,20 @@
-use std::collections::BTreeSet;
-use std::hash::{Hash, Hasher};
-use std::io::ErrorKind;
-use std::str::from_utf8_unchecked;
+use std::{
+    collections::BTreeSet,
+    hash::{Hash, Hasher},
+    io::ErrorKind,
+    str::from_utf8_unchecked,
+};
 
-use crate::scanner_rust::generic_array::typenum::U1024;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U1024, ScannerAscii, ScannerError};
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
 pub struct CPU {
     pub physical_id: usize,
-    pub model_name: String,
-    pub cpus_mhz: Vec<f64>,
-    pub siblings: usize,
-    pub cpu_cores: usize,
+    pub model_name:  String,
+    pub cpus_mhz:    Vec<f64>,
+    pub siblings:    usize,
+    pub cpu_cores:   usize,
 }
 
 impl Hash for CPU {
@@ -85,38 +86,38 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
                                     if model_name.is_empty() {
                                         model_name.push_str(value);
                                     }
-                                }
+                                },
                                 CPU_MHZ_INDEX => {
                                     cpus_mhz.push(value.parse()?);
-                                }
+                                },
                                 PHYSICAL_ID_INDEX => {
                                     physical_id = value.parse()?;
 
                                     if physical_ids.contains(&physical_id) {
                                         break 'item;
                                     }
-                                }
+                                },
                                 SIBLINGS_INDEX => {
                                     siblings = value.parse()?;
-                                }
+                                },
                                 CPU_CORES => {
                                     cpu_cores = value.parse()?;
 
                                     break 'item;
-                                }
+                                },
                                 _ => unreachable!(),
                             }
 
                             break;
                         }
-                    }
+                    },
                     None => {
                         if i == MODEL_NAME_INDEX {
                             break 'outer;
                         } else {
                             return Err(ErrorKind::UnexpectedEof.into());
                         }
-                    }
+                    },
                 }
             }
         }
@@ -148,10 +149,10 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
                     if line_length == 0 {
                         break;
                     }
-                }
+                },
                 None => {
                     break 'outer;
-                }
+                },
             }
         }
     }

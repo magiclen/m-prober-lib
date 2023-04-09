@@ -1,49 +1,52 @@
 extern crate chrono;
 extern crate regex;
 
-use std::collections::BTreeMap;
-use std::fs;
-use std::hash::{Hash, Hasher};
-use std::io::ErrorKind;
-use std::mem::take;
-use std::path::Path;
-use std::thread::sleep;
-use std::time::Duration;
-
-use crate::btime::get_btime;
-use crate::cpu::get_average_cpu_stat;
-use crate::process::{
-    get_process_stat, get_process_status, get_process_time_stat, ProcessFilter, ProcessStat,
-    ProcessState, ProcessTimeStat,
+use std::{
+    collections::BTreeMap,
+    fs,
+    hash::{Hash, Hasher},
+    io::ErrorKind,
+    mem::take,
+    path::Path,
+    thread::sleep,
+    time::Duration,
 };
-
-use crate::scanner_rust::ScannerError;
 
 use chrono::prelude::*;
 
+use crate::{
+    btime::get_btime,
+    cpu::get_average_cpu_stat,
+    process::{
+        get_process_stat, get_process_status, get_process_time_stat, ProcessFilter, ProcessStat,
+        ProcessState, ProcessTimeStat,
+    },
+    scanner_rust::ScannerError,
+};
+
 #[derive(Debug, Clone, Eq)]
 pub struct Process {
-    pub pid: u32,
-    pub effective_uid: u32,
-    pub effective_gid: u32,
-    pub state: ProcessState,
-    pub ppid: u32,
-    pub program: String,
-    pub cmdline: String,
-    pub tty: Option<String>,
-    pub priority: i8,
+    pub pid:                u32,
+    pub effective_uid:      u32,
+    pub effective_gid:      u32,
+    pub state:              ProcessState,
+    pub ppid:               u32,
+    pub program:            String,
+    pub cmdline:            String,
+    pub tty:                Option<String>,
+    pub priority:           i8,
     pub real_time_priority: Option<u8>,
-    pub nice: i8,
-    pub threads: usize,
+    pub nice:               i8,
+    pub threads:            usize,
     /// Virtual Set Size (VIRT)
-    pub vsz: usize,
+    pub vsz:                usize,
     /// Resident Set Size (RES)
-    pub rss: usize,
+    pub rss:                usize,
     /// Resident Shared Size (SHR)
-    pub rss_shared: usize,
+    pub rss_shared:         usize,
     /// Resident Anonymous Memory
-    pub rss_anon: usize,
-    pub start_time: DateTime<Utc>,
+    pub rss_anon:           usize,
+    pub start_time:         DateTime<Utc>,
 }
 
 impl Hash for Process {
@@ -133,7 +136,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
                 } else {
                     Some(format!("ttyS{}", stat.tty_nr_minor - 64))
                 }
-            }
+            },
             136..=143 => Some(format!("pts/{}", stat.tty_nr_minor)),
             _ => None,
         }
@@ -145,17 +148,13 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
                 if !tty_filter.is_match(tty) {
                     return Ok(None);
                 }
-            }
+            },
             None => return Ok(None),
         }
     }
 
     let priority = stat.priority;
-    let real_time_priority = if stat.rt_priority > 0 {
-        Some(stat.rt_priority)
-    } else {
-        None
-    };
+    let real_time_priority = if stat.rt_priority > 0 { Some(stat.rt_priority) } else { None };
     let nice = stat.nice;
     let threads = stat.num_threads;
     let vsz = stat.vsize;
@@ -215,7 +214,8 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Scanner
 /// use mprober_lib::process;
 ///
 /// let processes_with_stat =
-///     process::get_processes_with_stat(&process::ProcessFilter::default()).unwrap();
+///     process::get_processes_with_stat(&process::ProcessFilter::default())
+///         .unwrap();
 ///
 /// println!("{:#?}", processes_with_stat);
 /// ```
@@ -263,7 +263,7 @@ pub fn get_processes_with_stat(
 
                                 processes_with_stats.push((process, stat));
                             }
-                        }
+                        },
                         Err(err) => {
                             if let ScannerError::IOError(err) = &err {
                                 if err.kind() == ErrorKind::NotFound {
@@ -272,7 +272,7 @@ pub fn get_processes_with_stat(
                             }
 
                             return Err(err);
-                        }
+                        },
                     }
                 }
             }
@@ -290,7 +290,7 @@ pub fn get_processes_with_stat(
                             if let Some((process, stat)) = r {
                                 processes_with_stats.push((process, stat));
                             }
-                        }
+                        },
                         Err(err) => {
                             if let ScannerError::IOError(err) = &err {
                                 if err.kind() == ErrorKind::NotFound {
@@ -299,7 +299,7 @@ pub fn get_processes_with_stat(
                             }
 
                             return Err(err);
-                        }
+                        },
                     }
                 }
             }
@@ -314,16 +314,16 @@ pub fn get_processes_with_stat(
 /// ```rust
 /// extern crate mprober_lib;
 ///
-/// use std::thread::sleep;
-/// use std::time::Duration;
+/// use std::{thread::sleep, time::Duration};
 ///
 /// use mprober_lib::process;
 ///
-/// let processes_with_cpu_percentage = process::get_processes_with_cpu_utilization_in_percentage(
-///     &process::ProcessFilter::default(),
-///     Duration::from_millis(100),
-/// )
-/// .unwrap();
+/// let processes_with_cpu_percentage =
+///     process::get_processes_with_cpu_utilization_in_percentage(
+///         &process::ProcessFilter::default(),
+///         Duration::from_millis(100),
+///     )
+///     .unwrap();
 ///
 /// for (process, cpu_percentage) in processes_with_cpu_percentage {
 ///     println!("{}: {:.1}%", process.pid, cpu_percentage * 100.0);

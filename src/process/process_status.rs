@@ -1,15 +1,13 @@
-use std::io::ErrorKind;
-use std::path::Path;
+use std::{io::ErrorKind, path::Path};
 
-use crate::scanner_rust::generic_array::typenum::U192;
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::scanner_rust::{generic_array::typenum::U192, ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStatus {
     /// The user who created this process or the UID set via `setuid()` by the root caller.
-    pub real_uid: u32,
+    pub real_uid:      u32,
     /// The group who created this process or the GID set via `setgid()` by the root caller.
-    pub real_gid: u32,
+    pub real_gid:      u32,
     /// The UID set via `setuid()` by the caller.
     pub effective_uid: u32,
     /// The GID set via `setgid()` by the caller.
@@ -19,9 +17,9 @@ pub struct ProcessStatus {
     /// The GID set via `setgid()` by the root caller
     pub saved_set_gid: u32,
     /// The UID of the running executable file of this process.
-    pub fs_uid: u32,
+    pub fs_uid:        u32,
     /// The GID of the running executable file of this process.
-    pub fs_gid: u32,
+    pub fs_gid:        u32,
 }
 
 /// Get the status of a specific process found by ID by reading the `/proc/PID/status` file.

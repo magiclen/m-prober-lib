@@ -1,5 +1,4 @@
-use std::fmt::Write;
-use std::time::Duration;
+use std::{fmt::Write, time::Duration};
 
 /// Format a `Duration` to a string. The string would be like `4 hours, 39 minutes, and 25 seconds`.
 ///

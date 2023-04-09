@@ -2,9 +2,9 @@ extern crate chrono;
 
 use std::sync::Once;
 
-use crate::uptime::get_uptime;
-
 use chrono::prelude::*;
+
+use crate::uptime::get_uptime;
 
 /// Get the btime (boot time) by subtract the current uptime from the current unix epoch timestamp.
 ///

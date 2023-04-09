@@ -1,21 +1,24 @@
-use std::collections::HashSet;
-use std::ffi::CString;
-use std::hash::{Hash, Hasher};
-use std::io::{self, ErrorKind};
-use std::mem::zeroed;
-use std::thread::sleep;
-use std::time::Duration;
+use std::{
+    collections::HashSet,
+    ffi::CString,
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind},
+    mem::zeroed,
+    thread::sleep,
+    time::Duration,
+};
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
-
-use crate::volume::{get_mounts, VolumeSpeed, VolumeStat};
+use crate::{
+    scanner_rust::{ScannerAscii, ScannerError},
+    volume::{get_mounts, VolumeSpeed, VolumeStat},
+};
 
 #[derive(Debug, Clone, Eq)]
 pub struct Volume {
     pub device: String,
-    pub stat: VolumeStat,
-    pub size: u64,
-    pub used: u64,
+    pub stat:   VolumeStat,
+    pub size:   u64,
+    pub used:   u64,
     pub points: Vec<String>,
 }
 
@@ -131,7 +134,8 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 ///
 /// use mprober_lib::volume;
 ///
-/// let volumes_with_speed = volume::get_volumes_with_speed(Duration::from_millis(100)).unwrap();
+/// let volumes_with_speed =
+///     volume::get_volumes_with_speed(Duration::from_millis(100)).unwrap();
 ///
 /// for (volume, volume_with_speed) in volumes_with_speed {
 ///     println!("{}: ", volume.device);
