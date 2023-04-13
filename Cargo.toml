@@ -9,7 +9,6 @@ homepage = "https://magiclen.org/m-prober-lib"
 keywords = ["linux", "probe", "proc"]
 categories = ["os::unix-apis"]
 description = "A library aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes."
-readme = "README.md"
 license = "MIT"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "benches/bench.rs"]
 
