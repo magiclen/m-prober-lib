@@ -19,16 +19,15 @@ pub fn get_hostname() -> Result<String, ScannerError> {
 
     let mut buffer: Vec<u8> = Vec::with_capacity(buffer_size);
 
-    #[allow(clippy::uninit_vec)]
-    unsafe {
-        buffer.set_len(buffer_size);
-    }
-
     let c = unsafe { libc::gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer_size) }
         as usize;
 
     if c != 0 {
         return Err(io::Error::last_os_error().into());
+    }
+
+    unsafe {
+        buffer.set_len(buffer_size);
     }
 
     if let Some(end) = buffer.iter().copied().position(|e| e == b'\0') {
