@@ -274,7 +274,7 @@ pub fn get_all_cpu_utilization_in_percentage(
 
     let result = pre_cpus_stat
         .into_iter()
-        .zip(cpus_stat.into_iter())
+        .zip(cpus_stat)
         .map(|(pre_cpus_stat, cpus_stat)| {
             pre_cpus_stat.compute_cpu_utilization_in_percentage(&cpus_stat)
         })

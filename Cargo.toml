@@ -1,9 +1,9 @@
 [package]
 name = "mprober-lib"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.61"
 repository = "https://github.com/magiclen/m-prober-lib"
 homepage = "https://magiclen.org/m-prober-lib"
 keywords = ["linux", "probe", "proc"]
@@ -18,7 +18,7 @@ scanner-rust = "2.0.8"
 chrono = "0.4.11"
 regex = "1"
 
-page_size = "0.5"
+page_size = "0.6"
 
 [dev-dependencies]
 bencher = "0.1.5"
