@@ -1,5 +1,3 @@
-extern crate mprober_lib;
-
 use std::time::Duration;
 
 #[test]
