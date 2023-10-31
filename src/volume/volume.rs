@@ -39,13 +39,11 @@ impl PartialEq for Volume {
 /// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::volume;
 ///
 /// let volumes = volume::get_volumes().unwrap();
 ///
-/// println!("{:#?}", volumes);
+/// println!("{volumes:#?}");
 /// ```
 pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
     let mut mounts = get_mounts()?;
@@ -128,8 +126,6 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 /// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc. And measure the speed within a specific time interval.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use std::time::Duration;
 ///
 /// use mprober_lib::volume;

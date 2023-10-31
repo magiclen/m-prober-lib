@@ -13,13 +13,11 @@ pub struct LoadAverage {
 /// Get the load average by reading the `/proc/loadavg` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::load_average;
 ///
 /// let load_average = load_average::get_load_average().unwrap();
 ///
-/// println!("{:#?}", load_average);
+/// println!("{load_average:#?}");
 /// ```
 #[inline]
 pub fn get_load_average() -> Result<LoadAverage, ScannerError> {

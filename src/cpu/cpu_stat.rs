@@ -26,14 +26,12 @@ impl CPUStat {
     /// Add all idle time and non-idle time respectively.
     ///
     /// ```rust
-    /// extern crate mprober_lib;
-    ///
     /// use mprober_lib::cpu;
     ///
     /// let average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
     /// let cpu_time = average_cpu_stat.compute_cpu_time();
     ///
-    /// println!("{:#?}", cpu_time);
+    /// println!("{cpu_time:#?}");
     /// ```
     #[inline]
     pub fn compute_cpu_time(&self) -> CPUTime {
@@ -50,8 +48,6 @@ impl CPUStat {
     /// Compute CPU utilization in percentage between two `CPUStat` instances at different time. If it returns `1.0`, means `100%`.
     ///
     /// ```rust
-    /// extern crate mprober_lib;
-    ///
     /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::cpu;
@@ -82,13 +78,11 @@ impl CPUStat {
 /// Get average CPU stats by reading the `/proc/stat` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::cpu;
 ///
 /// let average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
 ///
-/// println!("{:#?}", average_cpu_stat);
+/// println!("{average_cpu_stat:#?}");
 /// ```
 pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
     let mut sc: ScannerAscii<_, U72> = ScannerAscii::scan_path2("/proc/stat")?;
@@ -127,13 +121,11 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
 /// Get all CPUs' stats with or without the average by reading the `/proc/stat` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::cpu;
 ///
 /// let all_cpus_stat = cpu::get_all_cpus_stat(false).unwrap();
 ///
-/// println!("{:#?}", all_cpus_stat);
+/// println!("{all_cpus_stat:#?}");
 /// ```
 pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerError> {
     let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/stat")?;
@@ -216,8 +208,6 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerErro
 /// Calculate average CPU utilization in percentage within a specific time interval. It will cause the current thread to sleep. If the number it returns is `1.0`, means `100%`.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use std::time::Duration;
 ///
 /// use mprober_lib::cpu;
@@ -243,8 +233,6 @@ pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f
 /// Calculate all CPU utilization in percentage with or without the average within a specific time interval. It will cause the current thread to sleep. If the number it returns is `1.0`, means `100%`.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use std::time::Duration;
 ///
 /// use mprober_lib::cpu;

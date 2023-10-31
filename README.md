@@ -8,8 +8,6 @@ This crate aims to quickly collect Linux system information including hostname, 
 ## Examples
 
 ```rust
-extern crate mprober_lib;
-
 use mprober_lib::*;
 
 println!("{}", hostname::get_hostname().unwrap());

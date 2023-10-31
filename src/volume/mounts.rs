@@ -5,13 +5,11 @@ use crate::scanner_rust::{generic_array::typenum::U1024, Scanner, ScannerError};
 /// Get mounting points of all block devices by reading the `/proc/mounts` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::volume;
 ///
 /// let mounts = volume::get_mounts().unwrap();
 ///
-/// println!("{:#?}", mounts);
+/// println!("{mounts:#?}");
 /// ```
 pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
     let mut sc: Scanner<_, U1024> = Scanner::scan_path2("/proc/mounts")?;

@@ -5,13 +5,11 @@ use crate::scanner_rust::ScannerError;
 /// Get the hostname using the `gethostname` function in libc.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::hostname;
 ///
 /// let hostname = hostname::get_hostname().unwrap();
 ///
-/// println!("{}", hostname);
+/// println!("{hostname}");
 /// ```
 #[inline]
 pub fn get_hostname() -> Result<String, ScannerError> {

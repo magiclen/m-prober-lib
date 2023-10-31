@@ -1,6 +1,3 @@
-extern crate chrono;
-extern crate regex;
-
 use std::{
     collections::BTreeMap,
     fs,
@@ -191,13 +188,11 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 /// Get information of a specific process found by ID by reading files in the `/proc/PID` folder.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::process;
 ///
-/// // let (process, _) = process::get_process_with_stat(1).unwrap();
+/// let (process, _) = process::get_process_with_stat(1).unwrap();
 ///
-/// // println!("{:#?}", process);
+/// println!("{process:#?}");
 /// ```
 #[inline]
 pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), ScannerError> {
@@ -209,15 +204,13 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Scanner
 /// Get process information by reading files in the `/proc/PID` folders.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::process;
 ///
 /// let processes_with_stat =
 ///     process::get_processes_with_stat(&process::ProcessFilter::default())
 ///         .unwrap();
 ///
-/// println!("{:#?}", processes_with_stat);
+/// println!("{processes_with_stat:#?}");
 /// ```
 pub fn get_processes_with_stat(
     process_filter: &ProcessFilter,
@@ -312,8 +305,6 @@ pub fn get_processes_with_stat(
 /// Get process information by reading files in the `/proc/PID` folders and measure the cpu utilization in percentage within a specific time interval. If the number it returns is `1.0`, means `100%`.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use std::{thread::sleep, time::Duration};
 ///
 /// use mprober_lib::process;

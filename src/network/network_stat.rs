@@ -16,8 +16,6 @@ impl NetworkStat {
     /// Calculate speed between two `NetworkStat` instances at different time.
     ///
     /// ```rust
-    /// extern crate mprober_lib;
-    ///
     /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::network;

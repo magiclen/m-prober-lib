@@ -1,5 +1,3 @@
-extern crate chrono;
-
 use std::{
     io::ErrorKind,
     time::{Duration, SystemTime},
@@ -19,14 +17,12 @@ impl Uptime {
     /// Get the btime (boot time) by subtract this uptime from the current unix epoch timestamp.
     ///
     /// ```rust
-    /// extern crate mprober_lib;
-    ///
     /// use mprober_lib::uptime;
     ///
     /// let uptime = uptime::get_uptime().unwrap();
     /// let btime = uptime.get_btime();
     ///
-    /// println!("{}", btime);
+    /// println!("{btime}");
     /// ```
     #[inline]
     pub fn get_btime(&self) -> DateTime<Utc> {
@@ -37,13 +33,11 @@ impl Uptime {
 /// Get the uptime by reading the `/proc/uptime` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::uptime;
 ///
 /// let uptime = uptime::get_uptime().unwrap();
 ///
-/// println!("{:#?}", uptime);
+/// println!("{uptime:#?}");
 /// ```
 #[inline]
 pub fn get_uptime() -> Result<Uptime, ScannerError> {

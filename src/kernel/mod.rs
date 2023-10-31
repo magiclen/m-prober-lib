@@ -5,13 +5,11 @@ use crate::scanner_rust::{generic_array::typenum::U48, ScannerAscii, ScannerErro
 /// Get the kernel version by reading the `/proc/version` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::kernel;
 ///
 /// let kernel_version = kernel::get_kernel_version().unwrap();
 ///
-/// println!("{}", kernel_version);
+/// println!("{kernel_version}");
 /// ```
 #[inline]
 pub fn get_kernel_version() -> Result<String, ScannerError> {

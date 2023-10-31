@@ -35,13 +35,11 @@ impl PartialEq for Network {
 /// Get network information by reading the `/proc/net/dev` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::network;
 ///
 /// let networks = network::get_networks().unwrap();
 ///
-/// println!("{:#?}", networks);
+/// println!("{networks:#?}");
 /// ```
 pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
     let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
@@ -84,8 +82,6 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 /// Get network information by reading the `/proc/net/dev` file and measure the speed within a specific time interval.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use std::time::Duration;
 ///
 /// use mprober_lib::network;

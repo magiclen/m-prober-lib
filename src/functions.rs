@@ -3,8 +3,6 @@ use std::{fmt::Write, time::Duration};
 /// Format a `Duration` to a string. The string would be like `4 hours, 39 minutes, and 25 seconds`.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::uptime;
 ///
 /// let uptime = uptime::get_uptime().unwrap();

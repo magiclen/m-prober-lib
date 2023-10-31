@@ -1,5 +1,3 @@
-extern crate page_size;
-
 use std::{io::ErrorKind, path::Path, str::from_utf8_unchecked};
 
 use page_size::get as get_page_size;
@@ -46,13 +44,11 @@ pub struct ProcessStat {
 /// Get the stat of a specific process found by ID by reading the `/proc/PID/stat` file and the `/proc/PID/statm` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::process;
 ///
 /// let process_stat = process::get_process_stat(1).unwrap();
 ///
-/// println!("{:#?}", process_stat);
+/// println!("{process_stat:#?}");
 /// ```
 pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
     let mut stat = ProcessStat::default();

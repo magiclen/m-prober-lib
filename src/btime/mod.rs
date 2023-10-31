@@ -1,5 +1,3 @@
-extern crate chrono;
-
 use std::sync::Once;
 
 use chrono::prelude::*;
@@ -9,13 +7,11 @@ use crate::uptime::get_uptime;
 /// Get the btime (boot time) by subtract the current uptime from the current unix epoch timestamp.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::btime;
 ///
 /// let btime = btime::get_btime();
 ///
-/// println!("{}", btime);
+/// println!("{btime}");
 /// ```
 #[inline]
 pub fn get_btime() -> DateTime<Utc> {

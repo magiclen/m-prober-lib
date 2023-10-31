@@ -25,13 +25,11 @@ pub struct ProcessStatus {
 /// Get the status of a specific process found by ID by reading the `/proc/PID/status` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::process;
 ///
 /// let process_status = process::get_process_status(1).unwrap();
 ///
-/// println!("{:#?}", process_status);
+/// println!("{process_status:#?}");
 /// ```
 pub fn get_process_status(pid: u32) -> Result<ProcessStatus, ScannerError> {
     let mut status = ProcessStatus::default();

@@ -15,8 +15,6 @@ impl ProcessTimeStat {
     /// Compute CPU utilization in percentage between two `ProcessTimeStat` instances at different time. If it returns `1.0`, means `100%`.
     ///
     /// ```rust
-    /// extern crate mprober_lib;
-    ///
     /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::{cpu, process};
@@ -77,13 +75,11 @@ impl From<ProcessStat> for ProcessTimeStat {
 /// Get the time stat of a specific process found by ID by reading the `/proc/PID/stat` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::process;
 ///
 /// let process_time_stat = process::get_process_time_stat(1).unwrap();
 ///
-/// println!("{:#?}", process_time_stat);
+/// println!("{process_time_stat:#?}");
 /// ```
 pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");

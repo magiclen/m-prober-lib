@@ -34,13 +34,11 @@ impl PartialEq for CPU {
 /// Get CPU information by reading the `/proc/cpuinfo` file.
 ///
 /// ```rust
-/// extern crate mprober_lib;
-///
 /// use mprober_lib::cpu;
 ///
 /// let cpus = cpu::get_cpus().unwrap();
 ///
-/// println!("{:#?}", cpus);
+/// println!("{cpus:#?}");
 /// ```
 pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
     const USEFUL_ITEMS: [&[u8]; 5] =
