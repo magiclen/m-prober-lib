@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ProcessState {
     Running,
     Sleeping,
@@ -12,6 +12,7 @@ pub enum ProcessState {
     Dead,
     Wakekill,
     Parked,
+    #[default]
     Idle,
 }
 
@@ -61,12 +62,5 @@ impl FromStr for ProcessState {
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ProcessState::from_str(s).ok_or(())
-    }
-}
-
-impl Default for ProcessState {
-    #[inline]
-    fn default() -> ProcessState {
-        ProcessState::Idle
     }
 }
