@@ -1,7 +1,11 @@
+mod vm_stat;
+
 use std::{
     fs::File,
     io::{self, ErrorKind, Read},
 };
+
+pub use vm_stat::*;
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
