@@ -4,10 +4,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    cpu::CPUTime,
-    scanner_rust::{ScannerAscii, ScannerError},
-};
+use crate::{Error, cpu::CPUTime, scanner_rust::ScannerAscii};
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]
@@ -83,9 +80,7 @@ impl CPUStat {
 
 /// Read the ten time fields that follow a `cpu` label in `/proc/stat`.
 #[inline]
-fn read_cpu_stat<R: Read, const N: usize>(
-    sc: &mut ScannerAscii<R, N>,
-) -> Result<CPUStat, ScannerError> {
+fn read_cpu_stat<R: Read, const N: usize>(sc: &mut ScannerAscii<R, N>) -> Result<CPUStat, Error> {
     let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -120,7 +115,7 @@ fn read_cpu_stat<R: Read, const N: usize>(
 ///
 /// println!("{average_cpu_stat:#?}");
 /// ```
-pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
+pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
     let mut sc: ScannerAscii<_, 72> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -141,7 +136,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
 ///
 /// println!("{all_cpus_stat:#?}");
 /// ```
-pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerError> {
+pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
     let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let mut cpus_stat = Vec::with_capacity(1);
@@ -184,7 +179,7 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerErro
 /// println!("{:.2}%", cpu_percentage * 100.0);
 /// ```
 #[inline]
-pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f64, ScannerError> {
+pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f64, Error> {
     let pre_cpu_stat = get_average_cpu_stat()?;
 
     sleep(interval);
@@ -217,7 +212,7 @@ pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f
 pub fn get_all_cpu_utilization_in_percentage(
     with_average: bool,
     interval: Duration,
-) -> Result<Vec<f64>, ScannerError> {
+) -> Result<Vec<f64>, Error> {
     let pre_cpus_stat = get_all_cpus_stat(with_average)?;
 
     sleep(interval);

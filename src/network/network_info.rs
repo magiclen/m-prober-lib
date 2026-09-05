@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    scanner_rust::ScannerError,
+    Error,
     utils::{read_sysfs_number, read_sysfs_string},
 };
 
@@ -29,7 +29,7 @@ pub struct NetworkInfo {
 ///
 /// println!("{network_info:#?}");
 /// ```
-pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, ScannerError> {
+pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Error> {
     let interface = interface.as_ref();
 
     // The name must be a single path component.

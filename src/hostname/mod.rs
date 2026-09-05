@@ -1,5 +1,5 @@
 use crate::{
-    scanner_rust::ScannerError,
+    Error,
     utils::{uname, utsname_field_to_string},
 };
 
@@ -13,7 +13,7 @@ use crate::{
 /// println!("{hostname}");
 /// ```
 #[inline]
-pub fn get_hostname() -> Result<String, ScannerError> {
+pub fn get_hostname() -> Result<String, Error> {
     let buffer = uname()?;
 
     Ok(utsname_field_to_string(&buffer.nodename))

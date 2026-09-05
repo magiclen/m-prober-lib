@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessIOSpeed {
@@ -86,7 +86,7 @@ impl ProcessIO {
 ///
 /// println!("{process_io:#?}");
 /// ```
-pub fn get_process_io(pid: u32) -> Result<ProcessIO, ScannerError> {
+pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
     let io_path = Path::new("/proc").join(pid.to_string()).join("io");
 
     let mut sc: ScannerAscii<_, 192> = ScannerAscii::scan_path2(io_path)?;

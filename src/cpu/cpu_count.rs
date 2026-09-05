@@ -1,9 +1,9 @@
 use std::io;
 
-use crate::scanner_rust::ScannerError;
+use crate::Error;
 
 #[inline]
-fn sysconf_count(name: libc::c_int) -> Result<usize, ScannerError> {
+fn sysconf_count(name: libc::c_int) -> Result<usize, Error> {
     let count = unsafe { libc::sysconf(name) };
 
     if count < 0 {
@@ -23,7 +23,7 @@ fn sysconf_count(name: libc::c_int) -> Result<usize, ScannerError> {
 /// println!("{online_cpu_count}");
 /// ```
 #[inline]
-pub fn get_online_cpu_count() -> Result<usize, ScannerError> {
+pub fn get_online_cpu_count() -> Result<usize, Error> {
     sysconf_count(libc::_SC_NPROCESSORS_ONLN)
 }
 
@@ -37,6 +37,6 @@ pub fn get_online_cpu_count() -> Result<usize, ScannerError> {
 /// println!("{configured_cpu_count}");
 /// ```
 #[inline]
-pub fn get_configured_cpu_count() -> Result<usize, ScannerError> {
+pub fn get_configured_cpu_count() -> Result<usize, Error> {
     sysconf_count(libc::_SC_NPROCESSORS_CONF)
 }

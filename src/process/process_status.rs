@@ -3,7 +3,7 @@ use std::{
     path::Path,
 };
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStatus {
@@ -34,7 +34,7 @@ pub struct ProcessStatus {
 ///
 /// println!("{process_status:#?}");
 /// ```
-pub fn get_process_status(pid: u32) -> Result<ProcessStatus, ScannerError> {
+pub fn get_process_status(pid: u32) -> Result<ProcessStatus, Error> {
     let mut status = ProcessStatus::default();
 
     let status_path = Path::new("/proc").join(pid.to_string()).join("status");

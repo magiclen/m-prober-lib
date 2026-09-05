@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 /// One line of a PSI (Pressure Stall Information) file.
 #[derive(Default, Debug, Clone)]
@@ -29,7 +29,7 @@ pub struct Pressure {
 
 fn read_pressure_stat<R: Read, const N: usize>(
     sc: &mut ScannerAscii<R, N>,
-) -> Result<PressureStat, ScannerError> {
+) -> Result<PressureStat, Error> {
     // The line looks like `some avg10=0.00 avg60=0.00 avg300=0.00 total=2357091`.
     sc.drop_next_until("avg10=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let avg10 = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -51,7 +51,7 @@ fn read_pressure_stat<R: Read, const N: usize>(
     })
 }
 
-fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, ScannerError> {
+fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
     let mut sc: ScannerAscii<R, 256> = ScannerAscii::new2(reader);
 
     let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -83,7 +83,7 @@ fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, ScannerError> {
 /// println!("{cpu_pressure:#?}");
 /// ```
 #[inline]
-pub fn get_cpu_pressure() -> Result<Pressure, ScannerError> {
+pub fn get_cpu_pressure() -> Result<Pressure, Error> {
     parse_pressure(File::open("/proc/pressure/cpu")?)
 }
 
@@ -97,7 +97,7 @@ pub fn get_cpu_pressure() -> Result<Pressure, ScannerError> {
 /// println!("{memory_pressure:#?}");
 /// ```
 #[inline]
-pub fn get_memory_pressure() -> Result<Pressure, ScannerError> {
+pub fn get_memory_pressure() -> Result<Pressure, Error> {
     parse_pressure(File::open("/proc/pressure/memory")?)
 }
 
@@ -111,7 +111,7 @@ pub fn get_memory_pressure() -> Result<Pressure, ScannerError> {
 /// println!("{io_pressure:#?}");
 /// ```
 #[inline]
-pub fn get_io_pressure() -> Result<Pressure, ScannerError> {
+pub fn get_io_pressure() -> Result<Pressure, Error> {
     parse_pressure(File::open("/proc/pressure/io")?)
 }
 

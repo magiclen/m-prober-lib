@@ -6,13 +6,13 @@ use std::{
     time::Duration,
 };
 
-use crate::scanner_rust::ScannerError;
+use crate::Error;
 
 /// Parse a number from ASCII bytes.
 #[inline]
-pub(crate) fn parse_number<T: FromStr>(value: &[u8]) -> Result<T, ScannerError>
+pub(crate) fn parse_number<T: FromStr>(value: &[u8]) -> Result<T, Error>
 where
-    ScannerError: From<T::Err>, {
+    Error: From<T::Err>, {
     let s = from_utf8(value).map_err(|_| io::Error::from(ErrorKind::InvalidData))?;
 
     Ok(s.parse::<T>()?)
@@ -63,9 +63,9 @@ pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
 
 /// Read a small sysfs file and parse its content as a number.
 #[inline]
-pub(crate) fn read_sysfs_number<T: FromStr, P: AsRef<Path>>(path: P) -> Result<T, ScannerError>
+pub(crate) fn read_sysfs_number<T: FromStr, P: AsRef<Path>>(path: P) -> Result<T, Error>
 where
-    ScannerError: From<T::Err>, {
+    Error: From<T::Err>, {
     let data = read_single_record_file(path, 64)?;
 
     parse_number(data.trim_ascii_end())

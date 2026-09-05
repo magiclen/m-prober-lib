@@ -1,11 +1,12 @@
 use std::io::{self, ErrorKind};
 
 use crate::{
+    Error,
     process::{
         ProcessStat,
         process_stat::{read_process_stat_file, split_process_stat_line},
     },
-    scanner_rust::{ScannerError, ScannerU8SliceAscii},
+    scanner_rust::ScannerU8SliceAscii,
 };
 
 /// CPU times of a process in `USER_HZ` clock ticks.
@@ -83,7 +84,7 @@ impl From<ProcessStat> for ProcessTimeStat {
     }
 }
 
-fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, ScannerError> {
+fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, Error> {
     let (_, fields) = split_process_stat_line(line)?;
 
     let mut sc = ScannerU8SliceAscii::new(fields);
@@ -111,7 +112,7 @@ fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, ScannerError>
 /// println!("{process_time_stat:#?}");
 /// ```
 #[inline]
-pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
+pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, Error> {
     let line = read_process_stat_file(pid)?;
 
     parse_process_time_stat(&line)

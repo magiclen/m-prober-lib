@@ -5,8 +5,9 @@ use std::{
 };
 
 use crate::{
+    Error,
     process::ProcessState,
-    scanner_rust::{Scanner, ScannerError, ScannerU8SliceAscii},
+    scanner_rust::{Scanner, ScannerU8SliceAscii},
     utils::{page_size, read_single_record_file},
 };
 
@@ -51,7 +52,7 @@ pub struct ProcessStat {
 
 /// Read the whole `/proc/PID/stat` file, which is always a single line.
 #[inline]
-pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, ScannerError> {
+pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, Error> {
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
 
     Ok(read_single_record_file(stat_path, 1024)?)
@@ -59,7 +60,7 @@ pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, ScannerError> 
 
 /// Split a `/proc/PID/stat` line into the `comm` part and the fields after it.
 /// `comm` may contain spaces and parentheses, so the last `)` is the real end of it.
-pub(crate) fn split_process_stat_line(line: &[u8]) -> Result<(&[u8], &[u8]), ScannerError> {
+pub(crate) fn split_process_stat_line(line: &[u8]) -> Result<(&[u8], &[u8]), Error> {
     let start =
         line.iter().position(|&b| b == b'(').ok_or(io::Error::from(ErrorKind::InvalidData))?;
     let end =
@@ -73,7 +74,7 @@ pub(crate) fn split_process_stat_line(line: &[u8]) -> Result<(&[u8], &[u8]), Sca
 }
 
 /// Get only the parent PID of a process by reading the `/proc/PID/stat` file.
-pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, ScannerError> {
+pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, Error> {
     let line = read_process_stat_file(pid)?;
 
     let (_, fields) = split_process_stat_line(&line)?;
@@ -86,7 +87,7 @@ pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, ScannerError> {
     Ok(sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
 }
 
-fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
+fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
     let (comm, fields) = split_process_stat_line(line)?;
 
     let mut stat = ProcessStat {
@@ -165,7 +166,7 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
 ///
 /// println!("{process_stat:#?}");
 /// ```
-pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
+pub fn get_process_stat(pid: u32) -> Result<ProcessStat, Error> {
     let line = read_process_stat_file(pid)?;
 
     let mut stat = parse_process_stat(&line)?;

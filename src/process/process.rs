@@ -12,13 +12,13 @@ use std::{
 use chrono::prelude::*;
 
 use crate::{
+    Error,
     btime::get_btime,
     cpu::get_average_cpu_stat,
     process::{
         ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_stat,
         get_process_status, get_process_time_stat, process_stat::get_process_ppid,
     },
-    scanner_rust::ScannerError,
     utils::clock_ticks_to_duration,
 };
 
@@ -76,7 +76,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     pid: u32,
     process_path: P,
     process_filter: &ProcessFilter,
-) -> Result<ProcessProbe, ScannerError> {
+) -> Result<ProcessProbe, Error> {
     let process_path = process_path.as_ref();
 
     let status = get_process_status(pid)?;
@@ -208,7 +208,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 /// println!("{process:#?}");
 /// ```
 #[inline]
-pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), ScannerError> {
+pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> {
     let process_path = Path::new("/proc").join(pid.to_string());
 
     match get_process_with_stat_inner(pid, process_path, &ProcessFilter::default())? {
@@ -249,7 +249,7 @@ fn is_process_or_descendant(pid: u32, ancestor: u32, pid_ppid_map: &BTreeMap<u32
 /// ```
 pub fn get_processes_with_stat(
     process_filter: &ProcessFilter,
-) -> Result<Vec<(Process, ProcessStat)>, ScannerError> {
+) -> Result<Vec<(Process, ProcessStat)>, Error> {
     let mut processes_with_stat = Vec::new();
 
     // Every scanned process is recorded here (even the filtered ones), so descendants can be found no matter the scanning order.
@@ -277,7 +277,7 @@ pub fn get_processes_with_stat(
             },
             Err(err) => {
                 // The process may have exited during the scan.
-                if let ScannerError::IOError(err) = &err
+                if let Error::IOError(err) = &err
                     && err.kind() == ErrorKind::NotFound
                 {
                     continue;
@@ -318,7 +318,7 @@ pub fn get_processes_with_stat(
 pub fn get_processes_with_cpu_utilization_in_percentage(
     process_filter: &ProcessFilter,
     interval: Duration,
-) -> Result<Vec<(Process, f64)>, ScannerError> {
+) -> Result<Vec<(Process, f64)>, Error> {
     let pre_average_cpu_stat = get_average_cpu_stat()?;
     let processes_with_stat = get_processes_with_stat(process_filter)?;
 

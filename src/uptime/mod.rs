@@ -5,7 +5,7 @@ use std::{
 
 use chrono::prelude::*;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 #[derive(Default, Debug, Clone)]
 pub struct Uptime {
@@ -44,7 +44,7 @@ impl Uptime {
 /// println!("{uptime:#?}");
 /// ```
 #[inline]
-pub fn get_uptime() -> Result<Uptime, ScannerError> {
+pub fn get_uptime() -> Result<Uptime, Error> {
     let mut sc: ScannerAscii<_, 24> = ScannerAscii::scan_path2("/proc/uptime")?;
 
     let uptime = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

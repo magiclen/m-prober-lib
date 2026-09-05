@@ -5,10 +5,7 @@ use std::{
     path::Path,
 };
 
-use crate::{
-    scanner_rust::{Scanner, ScannerError},
-    utils::unescape_octal,
-};
+use crate::{Error, scanner_rust::Scanner, utils::unescape_octal};
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
 ///
@@ -19,7 +16,7 @@ use crate::{
 ///
 /// println!("{mounts:#?}");
 /// ```
-pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
+pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, Error> {
     let mut sc: Scanner<_, 1024> = Scanner::scan_path2("/proc/mounts")?;
 
     let mut mounts: HashMap<String, Vec<String>> = HashMap::with_capacity(1);

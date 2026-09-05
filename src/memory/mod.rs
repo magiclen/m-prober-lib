@@ -7,7 +7,7 @@ use std::{
 
 pub use vm_stat::*;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 /// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]
@@ -73,7 +73,7 @@ const USEFUL_ITEMS: [&[u8]; 10] = [
     b"KReclaimable:",
 ];
 
-fn parse_meminfo<R: Read>(reader: R) -> Result<Free, ScannerError> {
+fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
     let mut sc: ScannerAscii<R, 768> = ScannerAscii::new2(reader);
 
     // The items are looked up by label instead of by position, so neither the order nor the presence of a line matters.
@@ -147,7 +147,7 @@ fn parse_meminfo<R: Read>(reader: R) -> Result<Free, ScannerError> {
 /// println!("{free:#?}");
 /// ```
 #[inline]
-pub fn free() -> Result<Free, ScannerError> {
+pub fn free() -> Result<Free, Error> {
     parse_meminfo(File::open("/proc/meminfo")?)
 }
 

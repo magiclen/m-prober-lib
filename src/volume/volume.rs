@@ -9,7 +9,8 @@ use std::{
 };
 
 use crate::{
-    scanner_rust::{ScannerAscii, ScannerError},
+    Error,
+    scanner_rust::ScannerAscii,
     volume::{VolumeSpeed, VolumeStat, get_mounts},
 };
 
@@ -76,7 +77,7 @@ fn statvfs(point: &str) -> Option<(u64, u64, u64)> {
 ///
 /// println!("{volumes:#?}");
 /// ```
-pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
+pub fn get_volumes() -> Result<Vec<Volume>, Error> {
     let mut mounts = get_mounts()?;
 
     let mut sc = ScannerAscii::scan_path("/proc/diskstats")?;
@@ -181,9 +182,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 ///     println!("    Utilization: {:.1}%", volume_speed.utilization * 100.0);
 /// }
 /// ```
-pub fn get_volumes_with_speed(
-    interval: Duration,
-) -> Result<Vec<(Volume, VolumeSpeed)>, ScannerError> {
+pub fn get_volumes_with_speed(interval: Duration) -> Result<Vec<(Volume, VolumeSpeed)>, Error> {
     let pre_volumes = get_volumes()?;
 
     let pre_volumes_length = pre_volumes.len();

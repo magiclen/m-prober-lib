@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    scanner_rust::ScannerError,
+    Error,
     utils::{read_sysfs_number, read_sysfs_string},
 };
 
@@ -119,7 +119,7 @@ fn read_sensors(device_path: &Path) -> Option<(Vec<Temperature>, Vec<Fan>)> {
 ///
 /// println!("{hwmon_devices:#?}");
 /// ```
-pub fn get_hwmon_devices() -> Result<Vec<HwmonDevice>, ScannerError> {
+pub fn get_hwmon_devices() -> Result<Vec<HwmonDevice>, Error> {
     let read_dir = match fs::read_dir("/sys/class/hwmon") {
         Ok(read_dir) => read_dir,
         // A kernel without hwmon support simply has no devices.

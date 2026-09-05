@@ -1,7 +1,8 @@
 use std::io::{self, ErrorKind};
 
 use crate::{
-    scanner_rust::{ScannerAscii, ScannerError},
+    Error,
+    scanner_rust::ScannerAscii,
     utils::{uname, utsname_field_to_string},
 };
 
@@ -25,7 +26,7 @@ pub struct FileNr {
 /// println!("{file_nr:#?}");
 /// ```
 #[inline]
-pub fn get_file_nr() -> Result<FileNr, ScannerError> {
+pub fn get_file_nr() -> Result<FileNr, Error> {
     let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/sys/fs/file-nr")?;
 
     let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -63,7 +64,7 @@ pub struct Uname {
 /// println!("{uname:#?}");
 /// ```
 #[inline]
-pub fn get_uname() -> Result<Uname, ScannerError> {
+pub fn get_uname() -> Result<Uname, Error> {
     let buffer = uname()?;
 
     Ok(Uname {
@@ -85,7 +86,7 @@ pub fn get_uname() -> Result<Uname, ScannerError> {
 /// println!("{kernel_version}");
 /// ```
 #[inline]
-pub fn get_kernel_version() -> Result<String, ScannerError> {
+pub fn get_kernel_version() -> Result<String, Error> {
     let buffer = uname()?;
 
     Ok(utsname_field_to_string(&buffer.release))

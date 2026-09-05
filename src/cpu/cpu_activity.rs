@@ -1,6 +1,6 @@
 use std::io::{self, ErrorKind};
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
@@ -29,7 +29,7 @@ pub struct CPUActivity {
 ///
 /// println!("{cpu_activity:#?}");
 /// ```
-pub fn get_cpu_activity() -> Result<CPUActivity, ScannerError> {
+pub fn get_cpu_activity() -> Result<CPUActivity, Error> {
     let mut sc: ScannerAscii<_, 4096> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let mut activity = CPUActivity::default();

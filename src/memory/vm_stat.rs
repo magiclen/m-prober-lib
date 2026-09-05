@@ -1,6 +1,6 @@
 use std::io::{self, ErrorKind};
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 /// Paging counters read from the `/proc/vmstat` file.
 #[derive(Default, Debug, Clone)]
@@ -28,7 +28,7 @@ pub struct VmStat {
 ///
 /// println!("{vm_stat:#?}");
 /// ```
-pub fn get_vm_stat() -> Result<VmStat, ScannerError> {
+pub fn get_vm_stat() -> Result<VmStat, Error> {
     const USEFUL_ITEMS_COUNT: usize = 6;
 
     let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/vmstat")?;

@@ -48,6 +48,7 @@ compile_error!("mprober-lib reads the `/proc` and `/sys` file systems, so it onl
 
 pub extern crate scanner_rust;
 
+mod error;
 mod functions;
 mod utils;
 
@@ -65,5 +66,7 @@ pub mod rtc_time;
 pub mod uptime;
 pub mod volume;
 
+pub use error::*;
 pub use functions::*;
+/// The error type this crate used before v0.2. It is kept for migration; every function now returns [`Error`].
 pub use scanner_rust::ScannerError;

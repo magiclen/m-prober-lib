@@ -2,7 +2,7 @@ use std::io::{self, ErrorKind};
 
 use chrono::prelude::*;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file. The RTC is normally set to UTC, but the file carries no timezone, so a `NaiveDateTime` is returned. The file only exists when an RTC driver is loaded, which is not the case in most containers.
 ///
@@ -14,7 +14,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 /// println!("{rtc_date_time}");
 /// ```
 #[inline]
-pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
+pub fn get_rtc_date_time() -> Result<NaiveDateTime, Error> {
     let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
 
     // The labels are searched for explicitly, so the order and the width of the fields do not matter.

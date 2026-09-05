@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    scanner_rust::ScannerError,
+    Error,
     utils::{parse_number, read_file, read_sysfs_number},
 };
 
@@ -93,7 +93,7 @@ fn flush_processor_block(block: ProcessorBlock, builders: &mut BTreeMap<usize, C
 }
 
 /// Parse the content of `/proc/cpuinfo`. Each CPU is returned with the numbers of its logical processors.
-fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, ScannerError> {
+fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, Error> {
     let mut builders: BTreeMap<usize, CPUBuilder> = BTreeMap::new();
 
     let mut block = ProcessorBlock::default();
@@ -159,7 +159,7 @@ fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, ScannerError> {
 ///
 /// println!("{cpus:#?}");
 /// ```
-pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
+pub fn get_cpus() -> Result<Vec<CPU>, Error> {
     let data = read_file("/proc/cpuinfo", 64 * 1024)?;
 
     let cpus = parse_cpuinfo(&data)?;

@@ -12,7 +12,7 @@ use std::{
 pub use network_info::*;
 pub use network_stat::*;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, scanner_rust::ScannerAscii};
 
 #[derive(Default, Debug, Clone, Eq)]
 pub struct Network {
@@ -43,7 +43,7 @@ impl PartialEq for Network {
 ///
 /// println!("{networks:#?}");
 /// ```
-pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
+pub fn get_networks() -> Result<Vec<Network>, Error> {
     let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
 
     for _ in 0..2 {
@@ -120,9 +120,7 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 ///     println!("    Transmit: {:.1} B/s", network_speed.transmit);
 /// }
 /// ```
-pub fn get_networks_with_speed(
-    interval: Duration,
-) -> Result<Vec<(Network, NetworkSpeed)>, ScannerError> {
+pub fn get_networks_with_speed(interval: Duration) -> Result<Vec<(Network, NetworkSpeed)>, Error> {
     let pre_networks = get_networks()?;
 
     let pre_networks_length = pre_networks.len();
