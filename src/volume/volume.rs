@@ -84,55 +84,47 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
             let write_bytes =
                 sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
 
-            for _ in 0..2 {
-                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            }
+            let (size, used, available) = {
+                let path = CString::new(points[0].as_bytes()).unwrap();
 
-            let time_spent = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                let mut stats: libc::statvfs = unsafe { zeroed() };
 
-            if time_spent > 0 {
-                let (size, used, available) = {
-                    let path = CString::new(points[0].as_bytes()).unwrap();
+                let rtn = unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
 
-                    let mut stats: libc::statvfs = unsafe { zeroed() };
+                if rtn != 0 {
+                    return Err(io::Error::last_os_error().into());
+                }
 
-                    let rtn = unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
+                // POSIX defines the block counts in units of `f_frsize`, not `f_bsize`.
+                #[allow(clippy::unnecessary_cast)]
+                {
+                    let fragment_size = stats.f_frsize as u64;
+                    let blocks = stats.f_blocks as u64;
+                    let available_blocks = stats.f_bavail as u64;
 
-                    if rtn != 0 {
-                        return Err(io::Error::last_os_error().into());
-                    }
+                    (
+                        fragment_size * blocks,
+                        fragment_size * blocks.saturating_sub(available_blocks),
+                        fragment_size * available_blocks,
+                    )
+                }
+            };
 
-                    // POSIX defines the block counts in units of `f_frsize`, not `f_bsize`.
-                    #[allow(clippy::unnecessary_cast)]
-                    {
-                        let fragment_size = stats.f_frsize as u64;
-                        let blocks = stats.f_blocks as u64;
-                        let available_blocks = stats.f_bavail as u64;
+            let stat = VolumeStat {
+                read_bytes,
+                write_bytes,
+            };
 
-                        (
-                            fragment_size * blocks,
-                            fragment_size * blocks.saturating_sub(available_blocks),
-                            fragment_size * available_blocks,
-                        )
-                    }
-                };
+            let volume = Volume {
+                device,
+                stat,
+                size,
+                used,
+                available,
+                points,
+            };
 
-                let stat = VolumeStat {
-                    read_bytes,
-                    write_bytes,
-                };
-
-                let volume = Volume {
-                    device,
-                    stat,
-                    size,
-                    used,
-                    available,
-                    points,
-                };
-
-                volumes.push(volume);
-            }
+            volumes.push(volume);
         }
 
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

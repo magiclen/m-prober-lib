@@ -2,12 +2,11 @@ use std::{
     collections::HashMap,
     io::{self, ErrorKind},
     path::Path,
-    str::from_utf8_unchecked,
 };
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-/// Get mounting points of all block devices by reading the `/proc/mounts` file.
+/// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
 ///
 /// ```rust
 /// use mprober_lib::volume;
@@ -23,34 +22,23 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
 
     while let Some(device_path) = sc.next_raw()? {
         if device_path.starts_with(b"/dev/") {
-            let device = {
-                let device = &device_path[5..];
+            let device_path = String::from_utf8_lossy(&device_path);
 
-                if device.starts_with(b"mapper/") {
-                    let device_path =
-                        Path::new(unsafe { from_utf8_unchecked(device_path.as_ref()) })
-                            .canonicalize()?;
-
-                    device_path.file_name().unwrap().to_string_lossy().into_owned()
-                } else {
-                    unsafe { from_utf8_unchecked(device) }.to_string()
-                }
+            // Paths like `/dev/mapper/*` or `/dev/disk/by-uuid/*` are symlinks, so they are resolved to the real device name.
+            let device = match Path::new(device_path.as_ref()).canonicalize() {
+                Ok(real_path) => match real_path.file_name() {
+                    Some(file_name) => file_name.to_string_lossy().into_owned(),
+                    None => device_path[5..].to_string(),
+                },
+                Err(_) => device_path[5..].to_string(),
             };
 
-            let point = unsafe {
-                String::from_utf8_unchecked(
-                    sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-                )
-            };
+            let point = String::from_utf8_lossy(
+                &sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            )
+            .into_owned();
 
-            match mounts.get_mut(&device) {
-                Some(devices) => {
-                    devices.push(point);
-                },
-                None => {
-                    mounts.insert(device, vec![point]);
-                },
-            }
+            mounts.entry(device).or_default().push(point);
         }
 
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
