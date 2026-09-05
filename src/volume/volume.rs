@@ -15,11 +15,15 @@ use crate::{
 
 #[derive(Debug, Clone, Eq)]
 pub struct Volume {
-    pub device: String,
-    pub stat:   VolumeStat,
-    pub size:   u64,
-    pub used:   u64,
-    pub points: Vec<String>,
+    pub device:    String,
+    pub stat:      VolumeStat,
+    /// The size of the file system in bytes.
+    pub size:      u64,
+    /// `size - available`, which includes the blocks reserved for the root user.
+    pub used:      u64,
+    /// The space available to unprivileged users in bytes.
+    pub available: u64,
+    pub points:    Vec<String>,
 }
 
 impl Hash for Volume {
@@ -87,7 +91,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
             let time_spent = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             if time_spent > 0 {
-                let (size, used) = {
+                let (size, used, available) = {
                     let path = CString::new(points[0].as_bytes()).unwrap();
 
                     let mut stats: libc::statvfs = unsafe { zeroed() };
@@ -98,11 +102,19 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                         return Err(io::Error::last_os_error().into());
                     }
 
+                    // POSIX defines the block counts in units of `f_frsize`, not `f_bsize`.
                     #[allow(clippy::unnecessary_cast)]
-                    (
-                        stats.f_bsize as u64 * stats.f_blocks as u64,
-                        stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64,
-                    )
+                    {
+                        let fragment_size = stats.f_frsize as u64;
+                        let blocks = stats.f_blocks as u64;
+                        let available_blocks = stats.f_bavail as u64;
+
+                        (
+                            fragment_size * blocks,
+                            fragment_size * blocks.saturating_sub(available_blocks),
+                            fragment_size * available_blocks,
+                        )
+                    }
                 };
 
                 let stat = VolumeStat {
@@ -115,6 +127,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                     stat,
                     size,
                     used,
+                    available,
                     points,
                 };
 
