@@ -1,3 +1,6 @@
+mod mem_info;
+mod numa;
+mod swap_device;
 mod vm_stat;
 
 use std::{
@@ -5,12 +8,16 @@ use std::{
     io::{self, ErrorKind, Read},
 };
 
+pub use mem_info::*;
+pub use numa::*;
+pub use swap_device::*;
 pub use vm_stat::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
 /// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Mem {
     /// `MemTotal` in bytes.
     pub total:     u64,
@@ -30,6 +37,7 @@ pub struct Mem {
 
 /// Swap information in bytes.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Swap {
     /// `SwapTotal` in bytes.
     pub total: u64,
@@ -43,6 +51,7 @@ pub struct Swap {
 
 /// The memory and swap information that the `free` command shows.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Free {
     /// The physical memory usage.
     pub mem:  Mem,
