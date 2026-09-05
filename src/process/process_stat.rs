@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Error,
-    process::ProcessState,
+    process::{ProcessState, SchedulingPolicy},
     scanner_rust::ScannerU8SliceAscii,
     utils::{page_size, read_single_record_file},
 };
@@ -30,6 +30,10 @@ pub struct ProcessStat {
     pub tty_nr_minor: u32,
     /// The process group ID of the foreground process group of the controlling terminal.
     pub tpgid:        Option<u32>,
+    /// The number of minor page faults, which did not need disk I/O.
+    pub minflt:       u64,
+    /// The number of major page faults, which needed disk I/O.
+    pub majflt:       u64,
     /// Time spent in user mode, in clock ticks.
     pub utime:        u64,
     /// Time spent in kernel mode, in clock ticks.
@@ -56,6 +60,8 @@ pub struct ProcessStat {
     pub processor:    usize,
     /// The real-time scheduling priority. It is `0` for a process not running under a real-time policy.
     pub rt_priority:  u8,
+    /// The scheduling policy.
+    pub policy:       SchedulingPolicy,
     /// RssFile + RssShmem (resident shared size)
     pub shared:       usize,
     /// VmRSS - RssFile - RssShmem = RssAnon (resident anonymous memory, process occupied memory)
@@ -135,9 +141,18 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
         }
     }
 
-    for _ in 0..5 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    }
+    // flags
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    stat.minflt = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    // cminflt
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    stat.majflt = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    // cmajflt
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     stat.utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -164,6 +179,9 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
 
     stat.processor = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.rt_priority = sc.next_u8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.policy = SchedulingPolicy::from_raw(
+        sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+    );
 
     Ok(stat)
 }
@@ -219,6 +237,8 @@ pub(crate) mod tests {
         assert_eq!(136, stat.tty_nr_major);
         assert_eq!(0, stat.tty_nr_minor);
         assert_eq!(Some(1234), stat.tpgid);
+        assert_eq!(25149, stat.minflt);
+        assert_eq!(33, stat.majflt);
         assert_eq!(26, stat.utime);
         assert_eq!(45, stat.stime);
         assert_eq!(17345, stat.cutime);
@@ -231,6 +251,7 @@ pub(crate) mod tests {
         assert_eq!(u64::MAX, stat.rsslim);
         assert_eq!(2, stat.processor);
         assert_eq!(0, stat.rt_priority);
+        assert_eq!(SchedulingPolicy::Other, stat.policy);
     }
 
     #[test]

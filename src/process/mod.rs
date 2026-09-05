@@ -6,6 +6,7 @@ mod process_stat;
 mod process_state;
 mod process_status;
 mod process_time_stat;
+mod scheduling_policy;
 
 pub use process::*;
 pub use process_filter::*;
@@ -14,3 +15,4 @@ pub use process_stat::*;
 pub use process_state::*;
 pub use process_status::*;
 pub use process_time_stat::*;
+pub use scheduling_policy::*;
