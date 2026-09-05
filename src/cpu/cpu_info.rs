@@ -1,11 +1,11 @@
 use std::{
     collections::BTreeSet,
     hash::{Hash, Hasher},
-    io::ErrorKind,
+    io::{self, ErrorKind},
     str::from_utf8_unchecked,
 };
 
-use crate::scanner_rust::{generic_array::typenum::U1024, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
@@ -49,7 +49,7 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
     const SIBLINGS_INDEX: usize = 3;
     const CPU_CORES: usize = 4;
 
-    let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/cpuinfo")?;
+    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/cpuinfo")?;
 
     let mut cpus = Vec::with_capacity(1);
     let mut physical_ids: BTreeSet<usize> = BTreeSet::new();
@@ -72,7 +72,7 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
                                 .iter()
                                 .copied()
                                 .position(|b| b == b':')
-                                .ok_or(ErrorKind::InvalidData)?;
+                                .ok_or(io::Error::from(ErrorKind::InvalidData))?;
 
                             let value = unsafe {
                                 from_utf8_unchecked(&line[(item_len + colon_index + 1)..])
@@ -113,7 +113,7 @@ pub fn get_cpus() -> Result<Vec<CPU>, ScannerError> {
                         if i == MODEL_NAME_INDEX {
                             break 'outer;
                         } else {
-                            return Err(ErrorKind::UnexpectedEof.into());
+                            return Err(io::Error::from(ErrorKind::UnexpectedEof).into());
                         }
                     },
                 }

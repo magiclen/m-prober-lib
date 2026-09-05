@@ -1,8 +1,11 @@
-use std::{io::ErrorKind, path::Path};
+use std::{
+    io::{self, ErrorKind},
+    path::Path,
+};
 
 use crate::{
     process::ProcessStat,
-    scanner_rust::{generic_array::typenum::U96, Scanner, ScannerError},
+    scanner_rust::{Scanner, ScannerError},
 };
 
 #[derive(Default, Debug, Clone)]
@@ -84,12 +87,12 @@ impl From<ProcessStat> for ProcessTimeStat {
 pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
 
-    let mut sc: Scanner<_, U96> = Scanner::scan_path2(stat_path)?;
+    let mut sc: Scanner<_, 96> = Scanner::scan_path2(stat_path)?;
 
-    sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     loop {
-        let comm = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let comm = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if comm.ends_with(b")") {
             break;
@@ -97,11 +100,11 @@ pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> 
     }
 
     for _ in 0..11 {
-        sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    let utime = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-    let stime = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     let time_stat = ProcessTimeStat {
         utime,

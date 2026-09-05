@@ -2,20 +2,20 @@
 name = "mprober-lib"
 version = "0.1.15"
 authors = ["Magic Len <len@magiclen.org>"]
-edition = "2021"
-rust-version = "1.65"
+edition = "2024"
+rust-version = "1.89"
 repository = "https://github.com/magiclen/m-prober-lib"
 homepage = "https://magiclen.org/m-prober-lib"
 keywords = ["linux", "probe", "proc"]
 categories = ["os::unix-apis"]
 description = "A library aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "benches/bench.rs"]
+include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-libc = "0.2.71"
-scanner-rust = "2.0.8"
-chrono = "0.4.11"
+libc = "0.2"
+scanner-rust = "3"
+chrono = "0.4"
 regex = "1"
 
 page_size = "0.6"

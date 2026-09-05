@@ -3,14 +3,14 @@ mod network_stat;
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
-    io::ErrorKind,
+    io::{self, ErrorKind},
     thread::sleep,
     time::Duration,
 };
 
 pub use network_stat::*;
 
-use crate::scanner_rust::{generic_array::typenum::U1024, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone, Eq)]
 pub struct Network {
@@ -42,10 +42,10 @@ impl PartialEq for Network {
 /// println!("{networks:#?}");
 /// ```
 pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
-    let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
+    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
 
     for _ in 0..2 {
-        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
     let mut networks = Vec::with_capacity(1);
@@ -53,13 +53,13 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
     while let Some(interface) = sc.next_until_raw(":")? {
         let interface = unsafe { String::from_utf8_unchecked(interface) };
 
-        let receive_bytes = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         for _ in 0..7 {
-            sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         }
 
-        let transmit_bytes = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let transmit_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         let stat = NetworkStat {
             receive_bytes,
@@ -73,7 +73,7 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 
         networks.push(network);
 
-        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
     Ok(networks)

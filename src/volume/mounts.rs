@@ -1,6 +1,11 @@
-use std::{collections::HashMap, io::ErrorKind, path::Path, str::from_utf8_unchecked};
+use std::{
+    collections::HashMap,
+    io::{self, ErrorKind},
+    path::Path,
+    str::from_utf8_unchecked,
+};
 
-use crate::scanner_rust::{generic_array::typenum::U1024, Scanner, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file.
 ///
@@ -12,7 +17,7 @@ use crate::scanner_rust::{generic_array::typenum::U1024, Scanner, ScannerError};
 /// println!("{mounts:#?}");
 /// ```
 pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
-    let mut sc: Scanner<_, U1024> = Scanner::scan_path2("/proc/mounts")?;
+    let mut sc: Scanner<_, 1024> = Scanner::scan_path2("/proc/mounts")?;
 
     let mut mounts: HashMap<String, Vec<String>> = HashMap::with_capacity(1);
 
@@ -33,7 +38,9 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
             };
 
             let point = unsafe {
-                String::from_utf8_unchecked(sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?)
+                String::from_utf8_unchecked(
+                    sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+                )
             };
 
             match mounts.get_mut(&device) {
@@ -46,7 +53,7 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
             }
         }
 
-        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
     Ok(mounts)

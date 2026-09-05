@@ -1,6 +1,9 @@
-use std::{io::ErrorKind, path::Path};
+use std::{
+    io::{self, ErrorKind},
+    path::Path,
+};
 
-use crate::scanner_rust::{generic_array::typenum::U192, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStatus {
@@ -36,35 +39,39 @@ pub fn get_process_status(pid: u32) -> Result<ProcessStatus, ScannerError> {
 
     let status_path = Path::new("/proc").join(pid.to_string()).join("status");
 
-    let mut sc: ScannerAscii<_, U192> = ScannerAscii::scan_path2(status_path)?;
+    let mut sc: ScannerAscii<_, 192> = ScannerAscii::scan_path2(status_path)?;
 
     loop {
-        let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if label.starts_with(b"Uid") {
-            status.real_uid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.effective_uid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.saved_set_uid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.fs_uid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
+            status.real_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.effective_uid =
+                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.saved_set_uid =
+                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.fs_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             break;
         } else {
-            sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+            sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         }
     }
 
     loop {
-        let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if label.starts_with(b"Gid") {
-            status.real_gid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.effective_gid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.saved_set_gid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
-            status.fs_gid = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
+            status.real_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.effective_gid =
+                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.saved_set_gid =
+                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            status.fs_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             break;
         } else {
-            sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+            sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         }
     }
 

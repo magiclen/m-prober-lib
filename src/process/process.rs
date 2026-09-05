@@ -15,8 +15,8 @@ use crate::{
     btime::get_btime,
     cpu::get_average_cpu_stat,
     process::{
-        get_process_stat, get_process_status, get_process_time_stat, ProcessFilter, ProcessStat,
-        ProcessState, ProcessTimeStat,
+        ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_stat,
+        get_process_status, get_process_time_stat,
     },
     scanner_rust::ScannerError,
 };
@@ -71,24 +71,22 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 
     let status = get_process_status(pid)?;
 
-    if let Some(uid_filter) = process_filter.uid_filter {
-        if status.real_uid != uid_filter
-            && status.effective_uid != uid_filter
-            && status.saved_set_uid != uid_filter
-            && status.fs_uid != uid_filter
-        {
-            return Ok(None);
-        }
+    if let Some(uid_filter) = process_filter.uid_filter
+        && status.real_uid != uid_filter
+        && status.effective_uid != uid_filter
+        && status.saved_set_uid != uid_filter
+        && status.fs_uid != uid_filter
+    {
+        return Ok(None);
     }
 
-    if let Some(gid_filter) = process_filter.gid_filter {
-        if status.real_gid != gid_filter
-            && status.effective_gid != gid_filter
-            && status.saved_set_gid != gid_filter
-            && status.fs_gid != gid_filter
-        {
-            return Ok(None);
-        }
+    if let Some(gid_filter) = process_filter.gid_filter
+        && status.real_gid != gid_filter
+        && status.effective_gid != gid_filter
+        && status.saved_set_gid != gid_filter
+        && status.fs_gid != gid_filter
+    {
+        return Ok(None);
     }
 
     let cmdline = {
@@ -103,20 +101,19 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         unsafe { String::from_utf8_unchecked(data) }
     };
 
-    if let Some(program_filter) = process_filter.program_filter.as_ref() {
-        if !program_filter.is_match(&cmdline) {
-            program_filter_match = false;
-        }
+    if let Some(program_filter) = process_filter.program_filter.as_ref()
+        && !program_filter.is_match(&cmdline)
+    {
+        program_filter_match = false;
     }
 
     let mut stat = get_process_stat(pid)?;
 
-    if !program_filter_match {
-        if let Some(program_filter) = process_filter.program_filter.as_ref() {
-            if !program_filter.is_match(&stat.comm) {
-                return Ok(None);
-            }
-        }
+    if !program_filter_match
+        && let Some(program_filter) = process_filter.program_filter.as_ref()
+        && !program_filter.is_match(&stat.comm)
+    {
+        return Ok(None);
     }
 
     let effective_uid = status.effective_uid;
@@ -225,48 +222,48 @@ pub fn get_processes_with_stat(
         for dir_entry in proc.read_dir()? {
             let dir_entry = dir_entry?;
 
-            if let Some(file_name) = dir_entry.file_name().to_str() {
-                if let Ok(pid) = file_name.parse::<u32>() {
-                    let process_path = dir_entry.path();
+            if let Some(file_name) = dir_entry.file_name().to_str()
+                && let Ok(pid) = file_name.parse::<u32>()
+            {
+                let process_path = dir_entry.path();
 
-                    match get_process_with_stat_inner(pid, process_path, process_filter) {
-                        Ok(r) => {
-                            if let Some((process, stat)) = r {
-                                if pid != pid_filter && process.ppid != pid_filter {
-                                    let mut not_related = true;
+                match get_process_with_stat_inner(pid, process_path, process_filter) {
+                    Ok(r) => {
+                        if let Some((process, stat)) = r {
+                            if pid != pid_filter && process.ppid != pid_filter {
+                                let mut not_related = true;
 
-                                    let mut p_ppid = pid_ppid_map.get(&process.ppid);
+                                let mut p_ppid = pid_ppid_map.get(&process.ppid);
 
-                                    while let Some(ppid) = p_ppid.copied() {
-                                        if ppid == pid_filter {
-                                            not_related = false;
+                                while let Some(ppid) = p_ppid.copied() {
+                                    if ppid == pid_filter {
+                                        not_related = false;
 
-                                            break;
-                                        }
-
-                                        p_ppid = pid_ppid_map.get(&ppid);
+                                        break;
                                     }
 
-                                    if not_related {
-                                        continue;
-                                    }
+                                    p_ppid = pid_ppid_map.get(&ppid);
                                 }
 
-                                pid_ppid_map.insert(pid, process.ppid);
-
-                                processes_with_stats.push((process, stat));
-                            }
-                        },
-                        Err(err) => {
-                            if let ScannerError::IOError(err) = &err {
-                                if err.kind() == ErrorKind::NotFound {
+                                if not_related {
                                     continue;
                                 }
                             }
 
-                            return Err(err);
-                        },
-                    }
+                            pid_ppid_map.insert(pid, process.ppid);
+
+                            processes_with_stats.push((process, stat));
+                        }
+                    },
+                    Err(err) => {
+                        if let ScannerError::IOError(err) = &err
+                            && err.kind() == ErrorKind::NotFound
+                        {
+                            continue;
+                        }
+
+                        return Err(err);
+                    },
                 }
             }
         }
@@ -274,26 +271,26 @@ pub fn get_processes_with_stat(
         for dir_entry in proc.read_dir()? {
             let dir_entry = dir_entry?;
 
-            if let Some(file_name) = dir_entry.file_name().to_str() {
-                if let Ok(pid) = file_name.parse::<u32>() {
-                    let process_path = dir_entry.path();
+            if let Some(file_name) = dir_entry.file_name().to_str()
+                && let Ok(pid) = file_name.parse::<u32>()
+            {
+                let process_path = dir_entry.path();
 
-                    match get_process_with_stat_inner(pid, process_path, process_filter) {
-                        Ok(r) => {
-                            if let Some((process, stat)) = r {
-                                processes_with_stats.push((process, stat));
-                            }
-                        },
-                        Err(err) => {
-                            if let ScannerError::IOError(err) = &err {
-                                if err.kind() == ErrorKind::NotFound {
-                                    continue;
-                                }
-                            }
+                match get_process_with_stat_inner(pid, process_path, process_filter) {
+                    Ok(r) => {
+                        if let Some((process, stat)) = r {
+                            processes_with_stats.push((process, stat));
+                        }
+                    },
+                    Err(err) => {
+                        if let ScannerError::IOError(err) = &err
+                            && err.kind() == ErrorKind::NotFound
+                        {
+                            continue;
+                        }
 
-                            return Err(err);
-                        },
-                    }
+                        return Err(err);
+                    },
                 }
             }
         }

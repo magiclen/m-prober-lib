@@ -1,6 +1,6 @@
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 
-use crate::scanner_rust::{generic_array::typenum::U768, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Mem {
@@ -53,24 +53,24 @@ pub fn free() -> Result<Free, ScannerError> {
         b"SUnreclaim",
     ];
 
-    let mut sc: ScannerAscii<_, U768> = ScannerAscii::scan_path2("/proc/meminfo")?;
+    let mut sc: ScannerAscii<_, 768> = ScannerAscii::scan_path2("/proc/meminfo")?;
 
     let mut item_values = [0usize; USEFUL_ITEMS.len()];
 
     for (i, &item) in USEFUL_ITEMS.iter().enumerate() {
         loop {
-            let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             if label.starts_with(item) {
-                let value = sc.next_usize()?.ok_or(ErrorKind::UnexpectedEof)?;
+                let value = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
                 item_values[i] = value * 1024;
 
-                sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
                 break;
             } else {
-                sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+                sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
         }
     }

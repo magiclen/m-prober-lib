@@ -1,8 +1,8 @@
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 
 use chrono::prelude::*;
 
-use crate::scanner_rust::{generic_array::typenum::U52, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file.
 ///
@@ -15,21 +15,21 @@ use crate::scanner_rust::{generic_array::typenum::U52, ScannerAscii, ScannerErro
 /// ```
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
-    let mut sc: ScannerAscii<_, U52> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
+    let mut sc: ScannerAscii<_, 52> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
 
-    sc.drop_next_bytes("rtc_time".len())?.ok_or(ErrorKind::UnexpectedEof)?;
-    sc.drop_next_until(": ")?.ok_or(ErrorKind::UnexpectedEof)?;
+    sc.drop_next_bytes("rtc_time".len())?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    let hour = sc.next_u32_until(":")?.ok_or(ErrorKind::UnexpectedEof)?;
-    let minute = sc.next_u32_until(":")?.ok_or(ErrorKind::UnexpectedEof)?;
-    let second = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let hour = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let minute = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let second = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    sc.drop_next_bytes("rtc_time".len())?.ok_or(ErrorKind::UnexpectedEof)?;
-    sc.drop_next_until(": ")?.ok_or(ErrorKind::UnexpectedEof)?;
+    sc.drop_next_bytes("rtc_time".len())?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    let year = sc.next_i32_until("-")?.ok_or(ErrorKind::UnexpectedEof)?;
-    let month = sc.next_u32_until("-")?.ok_or(ErrorKind::UnexpectedEof)?;
-    let date = sc.next_u32()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let year = sc.next_i32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let month = sc.next_u32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let date = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     Ok(NaiveDateTime::new(
         NaiveDate::from_ymd_opt(year, month, date).unwrap(),

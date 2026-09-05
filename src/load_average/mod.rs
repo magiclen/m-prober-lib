@@ -1,6 +1,6 @@
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 
-use crate::scanner_rust::{generic_array::typenum::U24, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct LoadAverage {
@@ -21,11 +21,11 @@ pub struct LoadAverage {
 /// ```
 #[inline]
 pub fn get_load_average() -> Result<LoadAverage, ScannerError> {
-    let mut sc: ScannerAscii<_, U24> = ScannerAscii::scan_path2("/proc/loadavg")?;
+    let mut sc: ScannerAscii<_, 24> = ScannerAscii::scan_path2("/proc/loadavg")?;
 
-    let one = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
-    let five = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
-    let fifteen = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let one = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let five = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let fifteen = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     Ok(LoadAverage {
         one,

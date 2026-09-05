@@ -1,11 +1,12 @@
-use std::{io::ErrorKind, thread::sleep, time::Duration};
+use std::{
+    io::{self, ErrorKind},
+    thread::sleep,
+    time::Duration,
+};
 
 use crate::{
     cpu::CPUTime,
-    scanner_rust::{
-        generic_array::typenum::{U1024, U72},
-        ScannerAscii, ScannerError,
-    },
+    scanner_rust::{ScannerAscii, ScannerError},
 };
 
 #[derive(Default, Debug, Clone)]
@@ -85,21 +86,21 @@ impl CPUStat {
 /// println!("{average_cpu_stat:#?}");
 /// ```
 pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
-    let mut sc: ScannerAscii<_, U72> = ScannerAscii::scan_path2("/proc/stat")?;
+    let mut sc: ScannerAscii<_, 72> = ScannerAscii::scan_path2("/proc/stat")?;
 
-    let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     if label == b"cpu" {
-        let user = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let system = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let idle = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let iowait = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let irq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let softirq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let steal = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let guest = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-        let guest_nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let idle = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let iowait = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let irq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let softirq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let steal = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let guest = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let guest_nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         Ok(CPUStat {
             user,
@@ -114,7 +115,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
             guest_nice,
         })
     } else {
-        Err(ErrorKind::InvalidData.into())
+        Err(io::Error::from(ErrorKind::InvalidData).into())
     }
 }
 
@@ -128,24 +129,24 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, ScannerError> {
 /// println!("{all_cpus_stat:#?}");
 /// ```
 pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerError> {
-    let mut sc: ScannerAscii<_, U1024> = ScannerAscii::scan_path2("/proc/stat")?;
+    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/stat")?;
 
     let mut cpus_stat = Vec::with_capacity(1);
 
     if with_average {
-        let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if label == b"cpu" {
-            let user = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let system = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let idle = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let iowait = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let irq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let softirq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let steal = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let guest = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let guest_nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let idle = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let iowait = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let irq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let softirq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let steal = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let guest = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let guest_nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             let cpu_stat = CPUStat {
                 user,
@@ -162,26 +163,26 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerErro
 
             cpus_stat.push(cpu_stat);
         } else {
-            return Err(ErrorKind::InvalidData.into());
+            return Err(io::Error::from(ErrorKind::InvalidData).into());
         }
     } else {
-        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
     loop {
-        let label = sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?;
+        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if label.starts_with(b"cpu") {
-            let user = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let system = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let idle = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let iowait = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let irq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let softirq = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let steal = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let guest = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
-            let guest_nice = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let idle = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let iowait = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let irq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let softirq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let steal = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let guest = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let guest_nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             let cpu_stat = CPUStat {
                 user,

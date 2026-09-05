@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     scanner_rust::{ScannerAscii, ScannerError},
-    volume::{get_mounts, VolumeSpeed, VolumeStat},
+    volume::{VolumeSpeed, VolumeStat, get_mounts},
 };
 
 #[derive(Debug, Clone, Eq)]
@@ -57,29 +57,32 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
             break;
         }
 
-        sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        let device =
-            unsafe { String::from_utf8_unchecked(sc.next_raw()?.ok_or(ErrorKind::UnexpectedEof)?) };
+        let device = unsafe {
+            String::from_utf8_unchecked(
+                sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            )
+        };
 
         if let Some(points) = mounts.remove(&device) {
             for _ in 0..2 {
-                sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
 
-            let read_bytes = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             for _ in 0..3 {
-                sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
 
-            let write_bytes = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let write_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             for _ in 0..2 {
-                sc.drop_next()?.ok_or(ErrorKind::UnexpectedEof)?;
+                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
 
-            let time_spent = sc.next_u64()?.ok_or(ErrorKind::UnexpectedEof)?;
+            let time_spent = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             if time_spent > 0 {
                 let (size, used) = {
@@ -117,7 +120,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
             }
         }
 
-        sc.drop_next_line()?.ok_or(ErrorKind::UnexpectedEof)?;
+        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
     Ok(volumes)

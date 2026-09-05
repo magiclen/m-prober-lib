@@ -1,11 +1,11 @@
 use std::{
-    io::ErrorKind,
+    io::{self, ErrorKind},
     time::{Duration, SystemTime},
 };
 
 use chrono::prelude::*;
 
-use crate::scanner_rust::{generic_array::typenum::U24, ScannerAscii, ScannerError};
+use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Uptime {
@@ -41,10 +41,10 @@ impl Uptime {
 /// ```
 #[inline]
 pub fn get_uptime() -> Result<Uptime, ScannerError> {
-    let mut sc: ScannerAscii<_, U24> = ScannerAscii::scan_path2("/proc/uptime")?;
+    let mut sc: ScannerAscii<_, 24> = ScannerAscii::scan_path2("/proc/uptime")?;
 
-    let uptime = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
-    let idle_time = sc.next_f64()?.ok_or(ErrorKind::UnexpectedEof)?;
+    let uptime = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let idle_time = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     Ok(Uptime {
         total_uptime:      Duration::from_secs_f64(uptime),
