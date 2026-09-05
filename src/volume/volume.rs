@@ -70,19 +70,37 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
         };
 
         if let Some(points) = mounts.remove(&device) {
-            for _ in 0..2 {
-                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            }
+            let reads_completed =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            // reads merged
+            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             // The sector fields in `/proc/diskstats` always use 512-byte sectors, regardless of the device's sector size.
             let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
 
-            for _ in 0..3 {
-                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            }
+            let read_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
+
+            let writes_completed =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            // writes merged
+            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             let write_bytes =
                 sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
+
+            let write_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
+
+            let io_in_progress = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            let io_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
 
             let (size, used, available) = {
                 let path = CString::new(points[0].as_bytes()).unwrap();
@@ -111,8 +129,14 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
             };
 
             let stat = VolumeStat {
+                reads_completed,
                 read_bytes,
+                read_time,
+                writes_completed,
                 write_bytes,
+                write_time,
+                io_in_progress,
+                io_time,
             };
 
             let volume = Volume {
@@ -143,10 +167,11 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 /// let volumes_with_speed =
 ///     volume::get_volumes_with_speed(Duration::from_millis(100)).unwrap();
 ///
-/// for (volume, volume_with_speed) in volumes_with_speed {
+/// for (volume, volume_speed) in volumes_with_speed {
 ///     println!("{}: ", volume.device);
-///     println!("    Read: {:.1} B/s", volume_with_speed.read);
-///     println!("    Write: {:.1} B/s", volume_with_speed.write);
+///     println!("    Read: {:.1} B/s", volume_speed.read);
+///     println!("    Write: {:.1} B/s", volume_speed.write);
+///     println!("    Utilization: {:.1}%", volume_speed.utilization * 100.0);
 /// }
 /// ```
 pub fn get_volumes_with_speed(
