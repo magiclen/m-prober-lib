@@ -8,7 +8,7 @@ repository = "https://github.com/magiclen/m-prober-lib"
 homepage = "https://magiclen.org/m-prober-lib"
 keywords = ["linux", "probe", "proc", "sysfs", "monitor"]
 categories = ["os::unix-apis"]
-description = "A library aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, pressure, sensors, network interfaces, block devices and processes."
+description = "A library aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, pressure, sensors, batteries, cgroup limits, network interfaces, block devices and processes."
 license = "MIT"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
