@@ -2,13 +2,14 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io::{self, ErrorKind, Read},
-    path::Path,
+    os::unix::fs::MetadataExt,
 };
 
 use crate::{Error, scanner_rust::ScannerAscii, utils::unescape_octal};
 
 /// The mount points of one block device, read from the `/proc/mounts` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Mount {
     /// The file system type, e.g. `ext4` or `btrfs`.
     pub fs_type: String,
@@ -45,23 +46,29 @@ fn parse_mounts<R: Read>(reader: R) -> Result<Vec<(String, String, String)>, Err
     Ok(entries)
 }
 
+/// Look up the name the kernel gives a block device in sysfs, which is the name `/proc/diskstats` uses.
+fn device_name_by_number(device_path: &str) -> Option<String> {
+    // The metadata is followed through symlinks, so `/dev/mapper/*` and `/dev/disk/by-uuid/*` need no separate `realpath` call.
+    let rdev = fs::metadata(device_path).ok()?.rdev();
+
+    let major = libc::major(rdev);
+    let minor = libc::minor(rdev);
+
+    fs::read_link(format!("/sys/dev/block/{major}:{minor}"))
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+}
+
 /// Resolve a device path from `/proc/mounts` to the device name used in `/proc/diskstats`.
 fn resolve_device_name(device_path: &str) -> String {
-    let path = Path::new(device_path);
-
-    // Only symlinks like `/dev/mapper/*` or `/dev/disk/by-uuid/*` need to be resolved to the real device name, and checking that first is cheaper than always calling `realpath`.
-    let is_symlink =
-        fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink());
-
-    if is_symlink
-        && let Some(name) = path.canonicalize().ok().and_then(|real_path| {
-            real_path.file_name().map(|name| name.to_string_lossy().into_owned())
-        })
-    {
+    if let Some(name) = device_name_by_number(device_path) {
         return name;
     }
 
-    device_path[5..].to_string()
+    // Without sysfs, or for a device node that does not exist in this mount namespace, the last path component is the best guess.
+    let name = device_path.rsplit('/').next().unwrap_or(device_path);
+
+    name.to_string()
 }
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
