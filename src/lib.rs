@@ -36,6 +36,7 @@ mod utils;
 pub mod btime;
 pub mod cpu;
 pub mod hostname;
+pub mod hwmon;
 pub mod kernel;
 pub mod load_average;
 pub mod memory;
