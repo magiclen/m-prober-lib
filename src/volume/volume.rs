@@ -11,11 +11,12 @@ use std::{
 use crate::{
     Error,
     scanner_rust::ScannerAscii,
-    volume::{VolumeSpeed, VolumeStat, get_mounts},
+    volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, get_mounts},
 };
 
 /// One mounted block device. Two instances are equal when their device names are equal.
 #[derive(Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Volume {
     /// The device name as it appears in the `/proc/diskstats` file, e.g. `nvme0n1p1`.
     pub device:      String,
@@ -106,7 +107,7 @@ fn statvfs(point: &str) -> Option<FsUsage> {
 pub fn get_volumes() -> Result<Vec<Volume>, Error> {
     let mut mounts = get_mounts()?;
 
-    let mut sc = ScannerAscii::scan_path("/proc/diskstats")?;
+    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/diskstats")?;
 
     let mut volumes = Vec::with_capacity(1);
 
@@ -123,85 +124,13 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
         .into_owned();
 
         if let Some(mount) = mounts.remove(&device) {
-            let reads_completed =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            // reads merged
-            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            // The sector fields in `/proc/diskstats` always use 512-byte sectors, regardless of the device's sector size.
-            let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
-
-            let read_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
-
-            let writes_completed =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            // writes merged
-            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            let write_bytes =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
-
-            let write_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
-
-            let io_in_progress = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            let io_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
-
-            let weighted_io_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
-
-            // The discard and flush fields exist since Linux 4.18 and 5.5 respectively.
-            let discards_completed =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            // discards merged
-            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            let discard_bytes =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
-
-            let discard_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
-
-            let flushes_completed =
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            let flush_time = Duration::from_millis(
-                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            );
+            let stat = read_volume_stat(&mut sc)?;
 
             // A mount point can be unreachable (a disconnected network device, a directory without the search permission), so a failure here only skips this volume.
             let Some(usage) = statvfs(&mount.points[0]) else {
                 sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
                 continue;
-            };
-
-            let stat = VolumeStat {
-                reads_completed,
-                read_bytes,
-                read_time,
-                writes_completed,
-                write_bytes,
-                write_time,
-                io_in_progress,
-                io_time,
-                weighted_io_time,
-                discards_completed,
-                discard_bytes,
-                discard_time,
-                flushes_completed,
-                flush_time,
             };
 
             let volume = Volume {
