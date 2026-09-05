@@ -1,25 +1,37 @@
-use std::io::{self, ErrorKind};
+use std::{
+    fs::File,
+    io::{self, ErrorKind, Read},
+};
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Mem {
+    /// `MemTotal`
     pub total:     u64,
-    /// total - free - buffers - cached - total_cached; total_cached = cached + slab - s_unreclaim
+    /// `MemTotal - MemAvailable`, the same as the `used` column of the `free` command in procps-ng 4.x
     pub used:      u64,
+    /// `MemFree`
     pub free:      u64,
+    /// `Shmem`
     pub shared:    u64,
+    /// `Buffers`
     pub buffers:   u64,
+    /// `Cached + KReclaimable`, the page cache plus the reclaimable kernel memory
     pub cache:     u64,
+    /// `MemAvailable`
     pub available: u64,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct Swap {
+    /// `SwapTotal`
     pub total: u64,
-    /// swap_total - swap_free - swap_cached
+    /// `SwapTotal - SwapFree - SwapCached`
     pub used:  u64,
+    /// `SwapFree`
     pub free:  u64,
+    /// `SwapCached`
     pub cache: u64,
 }
 
@@ -29,17 +41,9 @@ pub struct Free {
     pub swap: Swap,
 }
 
-/// Get memory information like the `free` command by reading the `/proc/meminfo` file.
-///
-/// ```rust
-/// use mprober_lib::memory;
-///
-/// let free = memory::free().unwrap();
-///
-/// println!("{free:#?}");
-/// ```
-pub fn free() -> Result<Free, ScannerError> {
-    const USEFUL_ITEMS: [&[u8]; 11] = [
+fn parse_meminfo<R: Read>(reader: R) -> Result<Free, ScannerError> {
+    // These items must be listed in the same order as they appear in the file.
+    const USEFUL_ITEMS: [&[u8]; 10] = [
         b"MemTotal",
         b"MemFree",
         b"MemAvailable",
@@ -49,11 +53,10 @@ pub fn free() -> Result<Free, ScannerError> {
         b"SwapTotal",
         b"SwapFree",
         b"Shmem",
-        b"Slab",
-        b"SUnreclaim",
+        b"KReclaimable",
     ];
 
-    let mut sc: ScannerAscii<_, 768> = ScannerAscii::scan_path2("/proc/meminfo")?;
+    let mut sc: ScannerAscii<R, 768> = ScannerAscii::new2(reader);
 
     let mut item_values = [0u64; USEFUL_ITEMS.len()];
 
@@ -84,18 +87,15 @@ pub fn free() -> Result<Free, ScannerError> {
     let swap_total = item_values[6];
     let swap_free = item_values[7];
     let shmem = item_values[8];
-    let slab = item_values[9];
-    let s_unreclaim = item_values[10];
-
-    let total_cached = (cached + slab).saturating_sub(s_unreclaim);
+    let k_reclaimable = item_values[9];
 
     let mem = Mem {
         total,
-        used: total.saturating_sub(free).saturating_sub(buffers).saturating_sub(total_cached),
+        used: total.saturating_sub(available),
         free,
         shared: shmem,
         buffers,
-        cache: total_cached,
+        cache: cached + k_reclaimable,
         available,
     };
 
@@ -110,4 +110,64 @@ pub fn free() -> Result<Free, ScannerError> {
         mem,
         swap,
     })
+}
+
+/// Get memory information like the `free` command by reading the `/proc/meminfo` file.
+///
+/// ```rust
+/// use mprober_lib::memory;
+///
+/// let free = memory::free().unwrap();
+///
+/// println!("{free:#?}");
+/// ```
+#[inline]
+pub fn free() -> Result<Free, ScannerError> {
+    parse_meminfo(File::open("/proc/meminfo")?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MEMINFO: &[u8] = b"MemTotal:       65083032 kB
+MemFree:        43608388 kB
+MemAvailable:   54095372 kB
+Buffers:            6528 kB
+Cached:         11571844 kB
+SwapCached:            0 kB
+Active:         14436784 kB
+Inactive:        5964948 kB
+Unevictable:       95872 kB
+Mlocked:             248 kB
+SwapTotal:       8000508 kB
+SwapFree:        8000508 kB
+Zswap:                 0 kB
+Dirty:              1728 kB
+AnonPages:       8950176 kB
+Mapped:          2314828 kB
+Shmem:            631916 kB
+KReclaimable:     268052 kB
+Slab:             639484 kB
+SReclaimable:     268052 kB
+SUnreclaim:       371432 kB
+";
+
+    #[test]
+    fn parse() {
+        let free = parse_meminfo(MEMINFO).unwrap();
+
+        assert_eq!(65083032 * 1024, free.mem.total);
+        assert_eq!((65083032 - 54095372) * 1024, free.mem.used);
+        assert_eq!(43608388 * 1024, free.mem.free);
+        assert_eq!(631916 * 1024, free.mem.shared);
+        assert_eq!(6528 * 1024, free.mem.buffers);
+        assert_eq!((11571844 + 268052) * 1024, free.mem.cache);
+        assert_eq!(54095372 * 1024, free.mem.available);
+
+        assert_eq!(8000508 * 1024, free.swap.total);
+        assert_eq!(0, free.swap.used);
+        assert_eq!(8000508 * 1024, free.swap.free);
+        assert_eq!(0, free.swap.cache);
+    }
 }
