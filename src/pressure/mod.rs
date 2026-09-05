@@ -75,7 +75,7 @@ fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, ScannerError> {
 
 /// Get the CPU pressure by reading the `/proc/pressure/cpu` file. PSI needs `CONFIG_PSI` and must not be disabled by the `psi=0` kernel parameter, otherwise the file does not exist.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::pressure;
 ///
 /// let cpu_pressure = pressure::get_cpu_pressure().unwrap();
@@ -89,7 +89,7 @@ pub fn get_cpu_pressure() -> Result<Pressure, ScannerError> {
 
 /// Get the memory pressure by reading the `/proc/pressure/memory` file. PSI needs `CONFIG_PSI` and must not be disabled by the `psi=0` kernel parameter, otherwise the file does not exist.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::pressure;
 ///
 /// let memory_pressure = pressure::get_memory_pressure().unwrap();
@@ -103,7 +103,7 @@ pub fn get_memory_pressure() -> Result<Pressure, ScannerError> {
 
 /// Get the I/O pressure by reading the `/proc/pressure/io` file. PSI needs `CONFIG_PSI` and must not be disabled by the `psi=0` kernel parameter, otherwise the file does not exist.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::pressure;
 ///
 /// let io_pressure = pressure::get_io_pressure().unwrap();

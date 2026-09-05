@@ -7,7 +7,9 @@ It reads the files provided by the kernel (`/proc` and `/sys`) or calls libc dir
 
 ## Examples
 
-```rust
+Some of these depend on optional kernel features, so this example is not run as a test.
+
+```rust,no_run
 use mprober_lib::*;
 
 println!("{}", hostname::get_hostname().unwrap());

@@ -1,18 +1,49 @@
-use std::str::FromStr;
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+};
 
+/// The error returned when a string is not a known process state.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ParseProcessStateError;
+
+impl Display for ParseProcessStateError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("unknown process state")
+    }
+}
+
+impl Error for ParseProcessStateError {}
+
+/// The single-character state of a process, as it appears in the `/proc/PID/stat` file.
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ProcessState {
-    Running,
-    Sleeping,
-    Waiting,
-    Zombie,
-    Stopped,
-    TracingStop,
-    PagingOrWaking,
-    Dead,
-    Wakekill,
-    Parked,
+    /// The state has not been read yet, or the kernel reported a character this crate does not know.
     #[default]
+    Unknown,
+    /// `R`
+    Running,
+    /// `S`
+    Sleeping,
+    /// `D`, uninterruptible sleep
+    Waiting,
+    /// `Z`
+    Zombie,
+    /// `T`
+    Stopped,
+    /// `t`
+    TracingStop,
+    /// `W`, paging on Linux 2.4 and waking on Linux 2.6.33 to 3.13
+    PagingOrWaking,
+    /// `X` or `x`
+    Dead,
+    /// `K`
+    Wakekill,
+    /// `P`
+    Parked,
+    /// `I`
     Idle,
 }
 
@@ -41,13 +72,14 @@ impl ProcessState {
     #[inline]
     pub fn as_str(self) -> &'static str {
         match self {
+            ProcessState::Unknown => "Unknown",
             ProcessState::Running => "Running",
             ProcessState::Sleeping => "Sleeping",
             ProcessState::Waiting => "Waiting",
             ProcessState::Zombie => "Zombie",
             ProcessState::Stopped => "Stopped",
             ProcessState::TracingStop => "TracingStop",
-            ProcessState::PagingOrWaking => "Waking",
+            ProcessState::PagingOrWaking => "PagingOrWaking",
             ProcessState::Dead => "Dead",
             ProcessState::Wakekill => "Wakekill",
             ProcessState::Parked => "Parked",
@@ -56,11 +88,18 @@ impl ProcessState {
     }
 }
 
+impl Display for ProcessState {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl FromStr for ProcessState {
-    type Err = ();
+    type Err = ParseProcessStateError;
 
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ProcessState::from_str(s).ok_or(())
+        ProcessState::from_str(s).ok_or(ParseProcessStateError)
     }
 }

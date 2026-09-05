@@ -4,9 +4,9 @@ use chrono::prelude::*;
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
-/// Get the RTC datetime by reading the `/proc/driver/rtc` file.
+/// Get the RTC datetime by reading the `/proc/driver/rtc` file. The RTC is normally set to UTC, but the file carries no timezone, so a `NaiveDateTime` is returned. The file only exists when an RTC driver is loaded, which is not the case in most containers.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::rtc_time;
 ///
 /// let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
@@ -15,16 +15,17 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 /// ```
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
-    let mut sc: ScannerAscii<_, 52> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
+    let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
 
-    sc.drop_next_bytes("rtc_time".len())?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    // The labels are searched for explicitly, so the order and the width of the fields do not matter.
+    sc.drop_next_until("rtc_time")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     let hour = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let minute = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let second = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    sc.drop_next_bytes("rtc_time".len())?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("rtc_date")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     let year = sc.next_i32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

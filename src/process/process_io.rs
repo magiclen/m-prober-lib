@@ -36,7 +36,7 @@ pub struct ProcessIO {
 impl ProcessIO {
     /// Calculate the storage I/O speed (based on `read_bytes` and `write_bytes`) between two `ProcessIO` instances at different time.
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use std::{thread::sleep, time::Duration};
     ///
     /// use mprober_lib::process;
@@ -77,9 +77,9 @@ impl ProcessIO {
     }
 }
 
-/// Get the I/O counters of a specific process found by ID by reading the `/proc/PID/io` file. Reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
+/// Get the I/O counters of a specific process found by ID by reading the `/proc/PID/io` file. The file needs `CONFIG_TASK_IO_ACCOUNTING`, and reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::process;
 ///
 /// let process_io = process::get_process_io(std::process::id()).unwrap();

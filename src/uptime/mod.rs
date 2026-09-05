@@ -16,7 +16,9 @@ pub struct Uptime {
 }
 
 impl Uptime {
-    /// Get the btime (boot time) by subtract this uptime from the current unix epoch timestamp.
+    /// Get the btime (boot time) by subtracting this uptime from the current unix epoch timestamp.
+    ///
+    /// This is computed from the moment this `Uptime` was read, so it differs by a few milliseconds from [`crate::btime::get_btime`], which is cached and derived from the system clocks.
     ///
     /// ```rust
     /// use mprober_lib::uptime;

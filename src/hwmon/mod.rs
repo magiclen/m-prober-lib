@@ -48,12 +48,17 @@ fn read_millidegree<P: AsRef<Path>>(path: P) -> Option<f64> {
     read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1000.0)
 }
 
-fn read_sensors(device_path: &Path) -> Result<(Vec<Temperature>, Vec<Fan>), ScannerError> {
+fn read_sensors(device_path: &Path) -> Option<(Vec<Temperature>, Vec<Fan>)> {
     let mut temperature_indices = Vec::new();
     let mut fan_indices = Vec::new();
 
-    for entry in fs::read_dir(device_path)? {
-        let file_name = entry?.file_name();
+    // The device may be removed while it is being scanned, so an unreadable entry is skipped.
+    for entry in fs::read_dir(device_path).ok()? {
+        let Ok(entry) = entry else {
+            continue;
+        };
+
+        let file_name = entry.file_name();
 
         let Some(file_name) = file_name.to_str() else {
             continue;
@@ -102,7 +107,7 @@ fn read_sensors(device_path: &Path) -> Result<(Vec<Temperature>, Vec<Fan>), Scan
         });
     }
 
-    Ok((temperatures, fans))
+    Some((temperatures, fans))
 }
 
 /// Get temperature and fan sensors of all hardware monitoring devices by reading files in the `/sys/class/hwmon` folder, like the `sensors` command. Thermal zones also appear here through the `thermal_hwmon` bridge. Reading a sensor can be slow on some hardware, so this function should not be called at a high frequency.
@@ -150,7 +155,9 @@ pub fn get_hwmon_devices() -> Result<Vec<HwmonDevice>, ScannerError> {
             continue;
         };
 
-        let (temperatures, fans) = read_sensors(&device_path)?;
+        let Some((temperatures, fans)) = read_sensors(&device_path) else {
+            continue;
+        };
 
         devices.push(HwmonDevice {
             name,
