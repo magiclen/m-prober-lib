@@ -41,7 +41,7 @@ pub struct Process {
     /// The path of the executable. It is `None` for kernel threads or when the permission is denied.
     /// The kernel appends ` (deleted)` to the path when the executable file has been removed or replaced.
     pub exe:                Option<PathBuf>,
-    /// The name of the controlling terminal, e.g. `pts/0`. It is `None` when there is none.
+    /// The name of the controlling terminal, e.g. `pts/0`, `tty1` or `ttyS0`. It is `None` when there is none.
     pub tty:                Option<String>,
     /// The scheduling priority.
     pub priority:           i8,
@@ -102,6 +102,28 @@ fn cmdline_to_string(mut data: Vec<u8>) -> String {
 
     // Command line arguments are arbitrary bytes, so they may not be valid UTF-8.
     String::from_utf8_lossy(&data).into_owned()
+}
+
+/// Get the name of a terminal device from its major and minor numbers, e.g. `pts/0` or `ttyS0`.
+fn tty_name(major: u16, minor: u32) -> Option<String> {
+    match major {
+        0 => None,
+        // Pseudo terminals have no sysfs entries, but their names follow a fixed rule.
+        136..=143 => Some(format!("pts/{minor}")),
+        _ => {
+            // The kernel links every character device to its sysfs folder, whose name is the device name (e.g. `ttyS0`, `ttyUSB0`, `ttyAMA0` or `hvc0`).
+            let name = fs::read_link(format!("/sys/dev/char/{major}:{minor}"))
+                .ok()
+                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
+
+            // Without sysfs, at least the classic serial and virtual consoles can still be named.
+            name.or_else(|| match major {
+                4 if minor < 64 => Some(format!("tty{minor}")),
+                4 => Some(format!("ttyS{}", minor - 64)),
+                _ => None,
+            })
+        },
+    }
 }
 
 /// Check whether an error means that the process exited during the scan.
@@ -168,19 +190,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let ppid = stat.ppid;
     let program = take(&mut stat.comm);
 
-    let tty = {
-        match stat.tty_nr_major {
-            4 => {
-                if stat.tty_nr_minor < 64 {
-                    Some(format!("tty{}", stat.tty_nr_minor))
-                } else {
-                    Some(format!("ttyS{}", stat.tty_nr_minor - 64))
-                }
-            },
-            136..=143 => Some(format!("pts/{}", stat.tty_nr_minor)),
-            _ => None,
-        }
-    };
+    let tty = tty_name(stat.tty_nr_major, stat.tty_nr_minor);
 
     if let Some(tty_filter) = process_filter.tty_filter.as_ref() {
         match tty.as_ref() {
