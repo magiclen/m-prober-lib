@@ -2,6 +2,7 @@ use std::time::Duration;
 
 /// The rates computed between two `VolumeStat` instances.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VolumeSpeed {
     /// Bytes read per second.
     pub read:                 f64,
@@ -19,6 +20,7 @@ pub struct VolumeSpeed {
 
 /// Counters read from the `/proc/diskstats` file.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VolumeStat {
     /// Read operations completed successfully.
     pub reads_completed:    u64,

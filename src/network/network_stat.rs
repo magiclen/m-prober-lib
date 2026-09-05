@@ -2,6 +2,7 @@ use std::time::Duration;
 
 /// The rates computed between two `NetworkStat` instances.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NetworkSpeed {
     /// Bytes received per second.
     pub receive:          f64,
@@ -15,6 +16,7 @@ pub struct NetworkSpeed {
 
 /// Counters read from the `/proc/net/dev` file.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NetworkStat {
     /// Bytes received.
     pub receive_bytes:    u64,

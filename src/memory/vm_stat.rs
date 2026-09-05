@@ -4,6 +4,7 @@ use crate::{Error, scanner_rust::ScannerAscii};
 
 /// Paging counters read from the `/proc/vmstat` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VmStat {
     /// KiB paged in from block devices (`pgpgin`).
     pub pages_in:          u64,

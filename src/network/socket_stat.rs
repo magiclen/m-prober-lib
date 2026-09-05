@@ -7,6 +7,7 @@ use crate::{
 
 /// Socket usage read from the `/proc/net/sockstat` file and the `/proc/net/sockstat6` file, like the `ss -s` command.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SocketStat {
     /// The number of sockets in use, of every protocol family (`sockets: used`).
     pub sockets_used:  u64,

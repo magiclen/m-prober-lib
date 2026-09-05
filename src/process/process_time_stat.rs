@@ -11,6 +11,7 @@ use crate::{
 
 /// CPU times of a process in `USER_HZ` clock ticks.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessTimeStat {
     /// Time spent in user mode, in clock ticks.
     pub utime: u64,

@@ -8,6 +8,7 @@ use crate::{Error, scanner_rust::ScannerAscii};
 
 /// The rates computed between two `ProcessIO` instances.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessIOSpeed {
     /// Bytes read from the storage layer per second.
     pub read:  f64,
@@ -17,6 +18,7 @@ pub struct ProcessIOSpeed {
 
 /// I/O counters read from the `/proc/PID/io` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessIO {
     /// Bytes passed to read-like syscalls, including data served from the page cache.
     pub rchar:                 u64,

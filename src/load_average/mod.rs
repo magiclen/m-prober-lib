@@ -4,6 +4,7 @@ use crate::{Error, scanner_rust::ScannerAscii, utils::parse_number};
 
 /// The load average read from the `/proc/loadavg` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LoadAverage {
     /// The load average over the last minute.
     pub one:              f64,

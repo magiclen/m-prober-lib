@@ -8,6 +8,7 @@ use crate::{Error, cpu::CPUTime, scanner_rust::ScannerAscii};
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CPUStat {
     /// Time spent in user mode.
     pub user:       u64,

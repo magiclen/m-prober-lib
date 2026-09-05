@@ -5,6 +5,7 @@ use crate::{Error, scanner_rust::ScannerAscii};
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CPUActivity {
     /// The total number of interrupts serviced since boot.
     pub interrupts:        u64,

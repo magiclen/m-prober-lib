@@ -10,6 +10,7 @@ use crate::Error;
 
 /// One IP address of a network interface.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NetworkAddress {
     /// The IPv4 or IPv6 address.
     pub address:       IpAddr,

@@ -9,6 +9,7 @@ use crate::{Error, scanner_rust::ScannerAscii};
 
 /// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Uptime {
     /// The time since boot, including the time spent in suspend.
     pub total_uptime:      Duration,

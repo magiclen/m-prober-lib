@@ -2,6 +2,7 @@ use std::fmt::{self, Display, Formatter};
 
 /// The scheduling policy of a process, as it appears in the `policy` field of the `/proc/PID/stat` file.
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SchedulingPolicy {
     /// The policy has not been read yet, or the kernel reported a value this crate does not know.
     #[default]

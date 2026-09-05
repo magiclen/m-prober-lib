@@ -19,6 +19,7 @@ impl Error for ParseProcessStateError {}
 
 /// The single-character state of a process, as it appears in the `/proc/PID/stat` file.
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProcessState {
     /// The state has not been read yet, or the kernel reported a character this crate does not know.
     #[default]
