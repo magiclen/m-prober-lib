@@ -36,13 +36,9 @@ pub enum ProcessState {
     Stopped,
     /// `t`
     TracingStop,
-    /// `W`, paging on Linux 2.4 and waking on Linux 2.6.33 to 3.13
-    PagingOrWaking,
-    /// `X` or `x`
+    /// `X`
     Dead,
-    /// `K`
-    Wakekill,
-    /// `P`
+    /// `P`, a kernel thread that was parked
     Parked,
     /// `I`
     Idle,
@@ -60,9 +56,7 @@ impl ProcessState {
             ProcessState::Zombie => "Zombie",
             ProcessState::Stopped => "Stopped",
             ProcessState::TracingStop => "TracingStop",
-            ProcessState::PagingOrWaking => "PagingOrWaking",
             ProcessState::Dead => "Dead",
-            ProcessState::Wakekill => "Wakekill",
             ProcessState::Parked => "Parked",
             ProcessState::Idle => "Idle",
         }
@@ -79,7 +73,7 @@ impl Display for ProcessState {
 impl FromStr for ProcessState {
     type Err = ParseProcessStateError;
 
-    /// Parse the single-character state that the `/proc/PID/stat` file reports.
+    /// Parse the single-character state that the `/proc/PID/stat` file reports. These are the letters of `task_state_array` in the kernel, which has not changed since Linux 4.14.
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -89,9 +83,7 @@ impl FromStr for ProcessState {
             "Z" => Ok(ProcessState::Zombie),
             "T" => Ok(ProcessState::Stopped),
             "t" => Ok(ProcessState::TracingStop),
-            "W" => Ok(ProcessState::PagingOrWaking),
-            "X" | "x" => Ok(ProcessState::Dead),
-            "K" => Ok(ProcessState::Wakekill),
+            "X" => Ok(ProcessState::Dead),
             "P" => Ok(ProcessState::Parked),
             "I" => Ok(ProcessState::Idle),
             _ => Err(ParseProcessStateError),

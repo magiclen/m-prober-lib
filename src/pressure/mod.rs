@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use scanner_rust::ScannerAscii;
+
+use crate::Error;
 
 /// One line of a PSI (Pressure Stall Information) file.
 #[derive(Default, Debug, Clone)]

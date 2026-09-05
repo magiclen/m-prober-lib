@@ -1,8 +1,9 @@
 use std::io::{self, ErrorKind};
 
+use scanner_rust::ScannerAscii;
+
 use crate::{
     Error,
-    scanner_rust::ScannerAscii,
     utils::{read_single_record_file, read_sysfs_number, uname, utsname_field_to_string},
 };
 
@@ -12,8 +13,6 @@ use crate::{
 pub struct FileNr {
     /// The number of allocated file handles.
     pub allocated: u64,
-    /// The number of allocated but unused file handles (always `0` since Linux 2.6).
-    pub unused:    u64,
     /// The maximum number of file handles.
     pub max:       u64,
 }
@@ -32,12 +31,14 @@ pub fn get_file_nr() -> Result<FileNr, Error> {
     let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/sys/fs/file-nr")?;
 
     let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let unused = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    // The second field is the number of unused handles, which has been `0` since Linux 2.6.
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
     let max = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     Ok(FileNr {
         allocated,
-        unused,
         max,
     })
 }

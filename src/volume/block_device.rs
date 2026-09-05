@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Error,
-    utils::{read_sysfs_number, read_sysfs_string},
+    utils::{is_single_path_component, read_sysfs_number, read_sysfs_string},
 };
 
 /// The disk a partition belongs to.
@@ -82,8 +82,7 @@ fn read_active_choice<P: AsRef<Path>>(path: P) -> Option<String> {
 pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo, Error> {
     let device = device.as_ref();
 
-    // The name must be a single path component.
-    if device.is_empty() || device == "." || device == ".." || device.contains('/') {
+    if !is_single_path_component(device) {
         return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
 

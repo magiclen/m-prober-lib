@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{Error, scanner_rust::ScannerAscii, volume::VolumeStat};
+use scanner_rust::ScannerAscii;
+
+use crate::{Error, volume::VolumeStat};
 
 /// Read the counters that follow the device name in a `/proc/diskstats` line. The line is not consumed to its end, because a caller may want to skip it instead.
 pub(crate) fn read_volume_stat<R: Read, const N: usize>(

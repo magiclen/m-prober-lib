@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    io::{self, ErrorKind},
+    path::Path,
+};
 
 use crate::{
     Error,
@@ -96,9 +99,9 @@ fn read_dmi<P: AsRef<Path>>(path: P) -> Option<String> {
     Some(value.to_owned())
 }
 
-/// Get the identity of the machine by reading files in the `/sys/class/dmi/id` folder. Every field is `None` on a platform without DMI, and the fields that carry a serial number are left out because reading them needs root.
+/// Get the identity of the machine by reading files in the `/sys/class/dmi/id` folder. A `NotFound` error is returned on a platform without DMI (e.g. most ARM boards), a field the firmware left empty is `None`, and the fields that carry a serial number are left out because reading them needs root.
 ///
-/// ```rust
+/// ```rust,no_run
 /// use mprober_lib::system;
 ///
 /// let dmi_info = system::get_dmi_info().unwrap();
@@ -107,6 +110,11 @@ fn read_dmi<P: AsRef<Path>>(path: P) -> Option<String> {
 /// ```
 pub fn get_dmi_info() -> Result<DmiInfo, Error> {
     let path = Path::new("/sys/class/dmi/id");
+
+    // Without the folder there is no DMI at all, which is reported like every other missing kernel feature instead of as a struct full of `None`.
+    if !path.is_dir() {
+        return Err(io::Error::from(ErrorKind::NotFound).into());
+    }
 
     Ok(DmiInfo {
         sys_vendor:      read_dmi(path.join("sys_vendor")),

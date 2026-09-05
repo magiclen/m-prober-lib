@@ -1,14 +1,14 @@
 use std::{
     io::{self, ErrorKind},
-    path::Path,
     str::from_utf8,
 };
+
+use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
     process::{ProcessState, SchedulingPolicy},
-    scanner_rust::ScannerU8SliceAscii,
-    utils::{page_size, read_single_record_file},
+    utils::{page_size, proc_pid_path, read_single_record_file},
 };
 
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
@@ -51,10 +51,10 @@ pub struct ProcessStat {
     pub num_threads:  usize,
     /// The time the process started after system boot, in clock ticks.
     pub starttime:    u64,
-    /// size, VmSize (total program size)
-    pub vsize:        usize,
-    /// resident, VmRSS (resident set size)
-    pub rss:          usize,
+    /// The virtual memory size in bytes (`size` in `statm`, `VmSize`).
+    pub vsize:        u64,
+    /// The resident set size in bytes (`resident` in `statm`, `VmRSS`).
+    pub rss:          u64,
     /// The soft limit on the RSS in bytes. It is `u64::MAX` when the limit is unlimited.
     pub rsslim:       u64,
     /// The CPU number last executed on.
@@ -63,16 +63,16 @@ pub struct ProcessStat {
     pub rt_priority:  u8,
     /// The scheduling policy.
     pub policy:       SchedulingPolicy,
-    /// RssFile + RssShmem (resident shared size)
-    pub shared:       usize,
-    /// VmRSS - RssFile - RssShmem = RssAnon (resident anonymous memory, process occupied memory)
-    pub rss_anon:     usize,
+    /// The resident shared size in bytes, which is `RssFile + RssShmem`.
+    pub shared:       u64,
+    /// The resident anonymous memory in bytes, which is `VmRSS - RssFile - RssShmem = RssAnon`. This is the memory the process occupies by itself.
+    pub rss_anon:     u64,
 }
 
 /// Read the whole `/proc/PID/stat` file, which is always a single line.
 #[inline]
 pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, Error> {
-    let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
+    let stat_path = proc_pid_path(pid).join("stat");
 
     Ok(read_single_record_file(stat_path, 1024)?)
 }
@@ -166,7 +166,8 @@ pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     stat.starttime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.vsize = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    // The sizes are in bytes, so they are read as `u64` even on a 32-bit target, where a 64-bit kernel reports processes that do not fit into `usize`.
+    stat.vsize = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     // the `rss` field is read from the `statm` file later, in order to keep it consistent with the `shared` field
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -214,7 +215,7 @@ pub(crate) fn get_process_stat_without_memory(pid: u32) -> Result<ProcessStat, E
 
 /// Fill the memory fields of a stat by reading the `/proc/PID/statm` file. They come from there instead of from the `stat` file, so that `rss` and `shared` are consistent with each other.
 pub(crate) fn read_process_statm_file(pid: u32, stat: &mut ProcessStat) -> Result<(), Error> {
-    let statm_path = Path::new("/proc").join(pid.to_string()).join("statm");
+    let statm_path = proc_pid_path(pid).join("statm");
 
     // The file is seven small numbers, so it always fits into one read.
     let statm = read_single_record_file(statm_path, 64)?;
@@ -223,10 +224,10 @@ pub(crate) fn read_process_statm_file(pid: u32, stat: &mut ProcessStat) -> Resul
 
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    let page_size = page_size();
+    let page_size = page_size() as u64;
 
-    stat.rss = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
-    stat.shared = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
+    stat.rss = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
+    stat.shared = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
 
     stat.rss_anon = stat.rss.saturating_sub(stat.shared);
 

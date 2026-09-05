@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use crate::{
     Error,
-    utils::{parse_number, read_single_record_file},
+    utils::{parse_number, proc_pid_path, read_single_record_file},
 };
 
 /// The memory of a process summed over all of its mappings, read from the `/proc/PID/smaps_rollup` file. Every field is in bytes.
@@ -10,41 +8,41 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessMemory {
     /// The resident set size (`Rss`), which counts every page the process has in RAM, no matter how many processes share it.
-    pub rss:             usize,
+    pub rss:             u64,
     /// The proportional set size (`Pss`), which divides every shared page by the number of processes sharing it. Adding this up over every process stays within the physical memory, which is what makes it the fair per-process number.
-    pub pss:             usize,
+    pub pss:             u64,
     /// The part of `pss` that is anonymous memory (`Pss_Anon`).
-    pub pss_anon:        usize,
+    pub pss_anon:        u64,
     /// The part of `pss` that is file-backed (`Pss_File`).
-    pub pss_file:        usize,
+    pub pss_file:        u64,
     /// The part of `pss` that is shared memory (`Pss_Shmem`).
-    pub pss_shmem:       usize,
+    pub pss_shmem:       u64,
     /// The clean pages that are shared with another process (`Shared_Clean`).
-    pub shared_clean:    usize,
+    pub shared_clean:    u64,
     /// The dirty pages that are shared with another process (`Shared_Dirty`).
-    pub shared_dirty:    usize,
+    pub shared_dirty:    u64,
     /// The clean pages that no other process maps (`Private_Clean`).
-    pub private_clean:   usize,
+    pub private_clean:   u64,
     /// The dirty pages that no other process maps (`Private_Dirty`). Together with `private_clean` this is the unique set size (USS), which is the memory that would be freed by killing the process.
-    pub private_dirty:   usize,
+    pub private_dirty:   u64,
     /// The pages that have been referenced recently (`Referenced`).
-    pub referenced:      usize,
+    pub referenced:      u64,
     /// The anonymous memory of the process (`Anonymous`).
-    pub anonymous:       usize,
+    pub anonymous:       u64,
     /// The memory backed by transparent huge pages (`AnonHugePages`).
-    pub anon_huge_pages: usize,
+    pub anon_huge_pages: u64,
     /// The memory that has been swapped out (`Swap`).
-    pub swap:            usize,
+    pub swap:            u64,
     /// The proportional share of the swapped-out memory (`SwapPss`).
-    pub swap_pss:        usize,
+    pub swap_pss:        u64,
     /// The memory that has been locked into RAM by `mlock(2)` (`Locked`).
-    pub locked:          usize,
+    pub locked:          u64,
 }
 
 impl ProcessMemory {
     /// Get the unique set size (USS), which is `private_clean + private_dirty`. This is the memory that killing the process would actually free.
     #[inline]
-    pub fn unique_set_size(&self) -> usize {
+    pub fn unique_set_size(&self) -> u64 {
         self.private_clean + self.private_dirty
     }
 }
@@ -60,7 +58,7 @@ fn parse_process_memory(data: &[u8]) -> Result<ProcessMemory, Error> {
             continue;
         };
 
-        let Ok(value) = parse_number::<usize>(value) else {
+        let Ok(value) = parse_number::<u64>(value) else {
             continue;
         };
 
@@ -105,7 +103,7 @@ fn parse_process_memory(data: &[u8]) -> Result<ProcessMemory, Error> {
 /// ```
 #[inline]
 pub fn get_process_memory(pid: u32) -> Result<ProcessMemory, Error> {
-    let path = Path::new("/proc").join(pid.to_string()).join("smaps_rollup");
+    let path = proc_pid_path(pid).join("smaps_rollup");
 
     parse_process_memory(&read_single_record_file(path, 1024)?)
 }

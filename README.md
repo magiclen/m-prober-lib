@@ -62,6 +62,7 @@ println!("{:#?}", power_supply::get_power_supplies().unwrap());
 let cgroup_path = cgroup::get_cgroup_path().unwrap();
 println!("{:#?}", cgroup::get_cgroup_cpu(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_memory(&cgroup_path).unwrap());
+println!("{:#?}", cgroup::get_cgroup_memory_stat(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_memory_events(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_pids(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_io(&cgroup_path).unwrap());

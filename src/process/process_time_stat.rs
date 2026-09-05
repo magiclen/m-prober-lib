@@ -1,12 +1,13 @@
 use std::io::{self, ErrorKind};
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     process::{
         ProcessStat,
         process_stat::{read_process_stat_file, split_process_stat_line},
     },
-    scanner_rust::ScannerU8SliceAscii,
 };
 
 /// CPU times of a process in `USER_HZ` clock ticks.

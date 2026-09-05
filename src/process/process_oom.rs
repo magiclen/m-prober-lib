@@ -1,6 +1,7 @@
-use std::path::Path;
-
-use crate::{Error, utils::read_sysfs_number};
+use crate::{
+    Error,
+    utils::{proc_pid_path, read_sysfs_number},
+};
 
 /// How likely the OOM killer is to pick a process, read from the `/proc/PID/oom_*` files.
 #[derive(Default, Debug, Clone)]
@@ -30,7 +31,7 @@ impl ProcessOOM {
 /// println!("{process_oom:#?}");
 /// ```
 pub fn get_process_oom(pid: u32) -> Result<ProcessOOM, Error> {
-    let path = Path::new("/proc").join(pid.to_string());
+    let path = proc_pid_path(pid);
 
     let score = read_sysfs_number(path.join("oom_score"))?;
     let score_adj = read_sysfs_number(path.join("oom_score_adj"))?;

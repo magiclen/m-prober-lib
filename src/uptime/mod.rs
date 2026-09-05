@@ -4,8 +4,9 @@ use std::{
 };
 
 use chrono::prelude::*;
+use scanner_rust::ScannerAscii;
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use crate::Error;
 
 /// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]

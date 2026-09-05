@@ -45,6 +45,16 @@ fn get_cgroup_memory(bencher: &mut Bencher) {
     bench_if_available(bencher, || cgroup::get_cgroup_memory(&path));
 }
 
+fn get_cgroup_memory_stat(bencher: &mut Bencher) {
+    let Ok(path) = cgroup::get_cgroup_path() else {
+        bencher.iter(|| ());
+
+        return;
+    };
+
+    bench_if_available(bencher, || cgroup::get_cgroup_memory_stat(&path));
+}
+
 fn get_cgroup_io(bencher: &mut Bencher) {
     let Ok(path) = cgroup::get_cgroup_path() else {
         bencher.iter(|| ());
@@ -250,7 +260,7 @@ fn get_rtc_date_time(bencher: &mut Bencher) {
 }
 
 fn get_dmi_info(bencher: &mut Bencher) {
-    bencher.iter(|| system::get_dmi_info().unwrap());
+    bench_if_available(bencher, system::get_dmi_info);
 }
 
 fn get_boot_id(bencher: &mut Bencher) {
@@ -294,6 +304,7 @@ benchmark_group!(
     get_cgroup_path,
     get_cgroup_cpu,
     get_cgroup_memory,
+    get_cgroup_memory_stat,
     get_cgroup_io,
     get_cgroup_pressure
 );

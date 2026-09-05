@@ -1,8 +1,9 @@
 use std::path::Path;
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
-    scanner_rust::ScannerU8SliceAscii,
     utils::{parse_cpu_list, read_file, read_sysfs_string},
 };
 

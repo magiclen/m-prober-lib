@@ -19,10 +19,11 @@ pub use network_info::*;
 pub use network_stat::*;
 pub use protocol_stat::*;
 pub use route::*;
+use scanner_rust::ScannerAscii;
 pub use socket_connection::*;
 pub use socket_stat::*;
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use crate::Error;
 
 /// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]

@@ -8,9 +8,10 @@ use std::{
     time::Duration,
 };
 
+use scanner_rust::ScannerAscii;
+
 use crate::{
     Error,
-    scanner_rust::ScannerAscii,
     volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, mounts::get_mounts},
 };
 

@@ -2,7 +2,7 @@ use std::{fs, io::ErrorKind, path::Path};
 
 use crate::{
     Error,
-    utils::{read_sysfs_number, read_sysfs_string},
+    utils::{read_sysfs_micro, read_sysfs_number, read_sysfs_string},
 };
 
 /// One power supply under `/sys/class/power_supply`, e.g. a laptop battery or an AC adapter. Every driver reports a different set of attributes, so most fields are optional.
@@ -45,12 +45,6 @@ pub struct PowerSupply {
     pub cycle_count:        Option<u32>,
 }
 
-/// Read a value that the driver reports in millionths, like microwatt-hours or microvolts.
-#[inline]
-fn read_micro<P: AsRef<Path>>(path: P) -> Option<f64> {
-    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1_000_000.0)
-}
-
 fn read_power_supply(name: String, path: &Path) -> Option<PowerSupply> {
     // A device without a type cannot be interpreted, so it is skipped.
     let kind = read_sysfs_string(path.join("type")).ok()?;
@@ -63,15 +57,15 @@ fn read_power_supply(name: String, path: &Path) -> Option<PowerSupply> {
         online: read_sysfs_number::<u8, _>(path.join("online")).ok().map(|online| online == 1),
         capacity: read_sysfs_number(path.join("capacity")).ok(),
         capacity_level: read_sysfs_string(path.join("capacity_level")).ok(),
-        energy_now: read_micro(path.join("energy_now")),
-        energy_full: read_micro(path.join("energy_full")),
-        energy_full_design: read_micro(path.join("energy_full_design")),
-        charge_now: read_micro(path.join("charge_now")),
-        charge_full: read_micro(path.join("charge_full")),
-        charge_full_design: read_micro(path.join("charge_full_design")),
-        power_now: read_micro(path.join("power_now")),
-        current_now: read_micro(path.join("current_now")),
-        voltage_now: read_micro(path.join("voltage_now")),
+        energy_now: read_sysfs_micro(path.join("energy_now")),
+        energy_full: read_sysfs_micro(path.join("energy_full")),
+        energy_full_design: read_sysfs_micro(path.join("energy_full_design")),
+        charge_now: read_sysfs_micro(path.join("charge_now")),
+        charge_full: read_sysfs_micro(path.join("charge_full")),
+        charge_full_design: read_sysfs_micro(path.join("charge_full_design")),
+        power_now: read_sysfs_micro(path.join("power_now")),
+        current_now: read_sysfs_micro(path.join("current_now")),
+        voltage_now: read_sysfs_micro(path.join("voltage_now")),
         cycle_count: read_sysfs_number(path.join("cycle_count")).ok(),
     })
 }

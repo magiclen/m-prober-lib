@@ -10,10 +10,11 @@ use std::{
 
 pub use mem_info::*;
 pub use numa::*;
+use scanner_rust::ScannerAscii;
 pub use swap_device::*;
 pub use vm_stat::*;
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use crate::Error;
 
 /// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]

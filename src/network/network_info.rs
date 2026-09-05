@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Error,
-    utils::{read_sysfs_number, read_sysfs_string},
+    utils::{is_single_path_component, read_sysfs_number, read_sysfs_string},
 };
 
 /// The link information of a network interface, read from the `/sys/class/net` folder.
@@ -14,29 +14,23 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NetworkInfo {
     /// The interface index, which the `ip link` command shows in front of the name.
-    pub ifindex:       u32,
+    pub ifindex:     u32,
     /// The operational state, e.g. `up`, `down` or `unknown`.
-    pub operstate:     String,
+    pub operstate:   String,
     /// Whether a physical link is detected. It is `None` when the interface is down, because the kernel does not report it then.
-    pub carrier:       Option<bool>,
+    pub carrier:     Option<bool>,
     /// The duplex mode, `full` or `half`. It is `None` when the link is down, the interface is virtual or the driver does not know.
-    pub duplex:        Option<String>,
+    pub duplex:      Option<String>,
     /// The link speed in Mbps. It is `None` when the link is down or the interface is virtual.
-    pub speed_mbps:    Option<u32>,
+    pub speed_mbps:  Option<u32>,
     /// The maximum transmission unit in bytes.
-    pub mtu:           u32,
+    pub mtu:         u32,
     /// The hardware (MAC) address, e.g. `60:cf:84:ac:5a:19`.
-    pub mac_address:   String,
+    pub mac_address: String,
     /// The interface flags (`IFF_*` in `netdevice(7)`), e.g. `0x1003` for an ethernet interface that is up. The kernel computes `IFF_RUNNING` and `IFF_LOWER_UP` on the fly, so they are never set here; use `operstate` or `carrier` instead.
-    pub flags:         u32,
+    pub flags:       u32,
     /// The name of the driver that owns the interface, e.g. `r8169` or `iwlwifi`. It is `None` for a virtual interface that has no driver.
-    pub driver:        Option<String>,
-    /// The length of the transmit queue in packets.
-    pub tx_queue_len:  u32,
-    /// The number of receive queues the interface has. More than one means the driver can spread the load over several CPUs.
-    pub num_rx_queues: u32,
-    /// The number of transmit queues the interface has.
-    pub num_tx_queues: u32,
+    pub driver:      Option<String>,
 }
 
 impl NetworkInfo {
@@ -53,30 +47,6 @@ impl NetworkInfo {
     }
 }
 
-/// Count the `rx-N` and `tx-N` folders the kernel creates for the queues of an interface.
-fn count_queues(path: &Path) -> (u32, u32) {
-    let Ok(read_dir) = fs::read_dir(path) else {
-        return (0, 0);
-    };
-
-    let mut rx = 0;
-    let mut tx = 0;
-
-    for entry in read_dir.flatten() {
-        let file_name = entry.file_name();
-
-        let file_name = file_name.as_encoded_bytes();
-
-        if file_name.starts_with(b"rx-") {
-            rx += 1;
-        } else if file_name.starts_with(b"tx-") {
-            tx += 1;
-        }
-    }
-
-    (rx, tx)
-}
-
 /// Get the information of a network interface by reading files in the `/sys/class/net/INTERFACE` folder.
 ///
 /// ```rust
@@ -89,8 +59,7 @@ fn count_queues(path: &Path) -> (u32, u32) {
 pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Error> {
     let interface = interface.as_ref();
 
-    // The name must be a single path component.
-    if interface.is_empty() || interface == "." || interface == ".." || interface.contains('/') {
+    if !is_single_path_component(interface) {
         return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
 
@@ -125,10 +94,6 @@ pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Erro
         .ok()
         .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
 
-    let tx_queue_len = read_sysfs_number(path.join("tx_queue_len")).unwrap_or(0);
-
-    let (num_rx_queues, num_tx_queues) = count_queues(&path.join("queues"));
-
     Ok(NetworkInfo {
         ifindex,
         operstate,
@@ -139,8 +104,5 @@ pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Erro
         mac_address,
         flags,
         driver,
-        tx_queue_len,
-        num_rx_queues,
-        num_tx_queues,
     })
 }

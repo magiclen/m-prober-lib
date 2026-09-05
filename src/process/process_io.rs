@@ -1,10 +1,11 @@
 use std::{
     io::{self, ErrorKind},
-    path::Path,
     time::Duration,
 };
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use scanner_rust::ScannerAscii;
+
+use crate::{Error, utils::proc_pid_path};
 
 /// The rates computed between two `ProcessIO` instances.
 #[derive(Default, Debug, Clone)]
@@ -90,7 +91,7 @@ impl ProcessIO {
 /// println!("{process_io:#?}");
 /// ```
 pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
-    let io_path = Path::new("/proc").join(pid.to_string()).join("io");
+    let io_path = proc_pid_path(pid).join("io");
 
     let mut sc: ScannerAscii<_, 192> = ScannerAscii::scan_path2(io_path)?;
 

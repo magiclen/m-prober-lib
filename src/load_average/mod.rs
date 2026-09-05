@@ -1,6 +1,8 @@
 use std::io::{self, ErrorKind};
 
-use crate::{Error, scanner_rust::ScannerAscii, utils::parse_number};
+use scanner_rust::ScannerAscii;
+
+use crate::{Error, utils::parse_number};
 
 /// The load average read from the `/proc/loadavg` file.
 #[derive(Default, Debug, Clone)]

@@ -5,7 +5,9 @@ use std::{
     os::unix::fs::MetadataExt,
 };
 
-use crate::{Error, scanner_rust::ScannerAscii, utils::unescape_octal};
+use scanner_rust::ScannerAscii;
+
+use crate::{Error, utils::unescape_octal};
 
 /// The mount points of one block device, read from the `/proc/mounts` file. [`crate::volume::MountInfo`] is the public superset of this, so this only feeds [`get_volumes`](crate::volume::get_volumes).
 #[derive(Default, Debug, Clone)]

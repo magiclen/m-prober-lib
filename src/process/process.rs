@@ -20,7 +20,7 @@ use crate::{
         },
         process_status::read_process_status,
     },
-    utils::clock_ticks_to_duration,
+    utils::{clock_ticks_to_duration, proc_pid_path},
 };
 
 /// The names of the terminal devices that were already looked up in one scan. Every lookup is a `readlink` in sysfs, and a machine full of processes normally has only a handful of terminals.
@@ -57,16 +57,16 @@ pub struct Process {
     pub nice:               i8,
     /// The number of threads in this process.
     pub threads:            usize,
-    /// Virtual Set Size (VIRT)
-    pub vsz:                usize,
-    /// Resident Set Size (RES)
-    pub rss:                usize,
-    /// Resident Shared Size (SHR)
-    pub rss_shared:         usize,
-    /// Resident Anonymous Memory
-    pub rss_anon:           usize,
+    /// The virtual memory size in bytes (VIRT).
+    pub vsz:                u64,
+    /// The resident set size in bytes (RES).
+    pub rss:                u64,
+    /// The resident shared size in bytes (SHR).
+    pub rss_shared:         u64,
+    /// The resident anonymous memory in bytes.
+    pub rss_anon:           u64,
     /// The swapped-out memory size in bytes (`VmSwap`).
-    pub swap:               usize,
+    pub swap:               u64,
     /// The time this process started, computed from the boot time.
     pub start_time:         DateTime<Utc>,
 }
@@ -169,28 +169,28 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
             && status.fs_gid != gid_filter
     });
 
+    // The parent PID is only recorded when a PID filter needs it for finding descendants.
+    let record_ppid = process_filter.pid_filter.is_some();
+
     if uid_filtered || gid_filtered {
-        let ppid =
-            if process_filter.pid_filter.is_some() { Some(get_process_ppid(pid)?) } else { None };
+        let ppid = if record_ppid { Some(get_process_ppid(pid)?) } else { None };
 
         return Ok(ProcessProbe::Filtered(ppid));
     }
 
     let cmdline = cmdline_to_string(fs::read(process_path.join("cmdline"))?);
 
-    let program_filter_match = process_filter
-        .program_filter
-        .as_ref()
-        .is_none_or(|program_filter| program_filter.is_match(&cmdline));
+    let program_filter_match =
+        process_filter.program_filter.is_none_or(|program_filter| program_filter(&cmdline));
 
     // The memory fields live in a separate file, which a process that is dropped right here does not need.
     let mut stat = get_process_stat_without_memory(pid)?;
 
     if !program_filter_match
-        && let Some(program_filter) = process_filter.program_filter.as_ref()
-        && !program_filter.is_match(&stat.comm)
+        && let Some(program_filter) = process_filter.program_filter
+        && !program_filter(&stat.comm)
     {
-        return Ok(ProcessProbe::Filtered(Some(stat.ppid)));
+        return Ok(ProcessProbe::Filtered(record_ppid.then_some(stat.ppid)));
     }
 
     let effective_uid = status.effective_uid;
@@ -205,14 +205,14 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         .or_insert_with(|| tty_name(stat.tty_nr_major, stat.tty_nr_minor))
         .clone();
 
-    if let Some(tty_filter) = process_filter.tty_filter.as_ref() {
+    if let Some(tty_filter) = process_filter.tty_filter {
         match tty.as_ref() {
             Some(tty) => {
-                if !tty_filter.is_match(tty) {
-                    return Ok(ProcessProbe::Filtered(Some(ppid)));
+                if !tty_filter(tty) {
+                    return Ok(ProcessProbe::Filtered(record_ppid.then_some(ppid)));
                 }
             },
-            None => return Ok(ProcessProbe::Filtered(Some(ppid))),
+            None => return Ok(ProcessProbe::Filtered(record_ppid.then_some(ppid))),
         }
     }
 
@@ -270,7 +270,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 /// ```
 #[inline]
 pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> {
-    let process_path = Path::new("/proc").join(pid.to_string());
+    let process_path = proc_pid_path(pid);
 
     let mut tty_cache = TtyCache::new();
 
@@ -297,7 +297,7 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> 
 /// ```
 #[inline]
 pub fn get_process_cwd(pid: u32) -> Result<PathBuf, Error> {
-    Ok(fs::read_link(Path::new("/proc").join(pid.to_string()).join("cwd"))?)
+    Ok(fs::read_link(proc_pid_path(pid).join("cwd"))?)
 }
 
 /// Get the root directory of a specific process found by ID by reading the `/proc/PID/root` link. It is `/` unless the process was put into a `chroot` or a mount namespace of its own. Reading the link of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
@@ -311,7 +311,7 @@ pub fn get_process_cwd(pid: u32) -> Result<PathBuf, Error> {
 /// ```
 #[inline]
 pub fn get_process_root(pid: u32) -> Result<PathBuf, Error> {
-    Ok(fs::read_link(Path::new("/proc").join(pid.to_string()).join("root"))?)
+    Ok(fs::read_link(proc_pid_path(pid).join("root"))?)
 }
 
 /// Check whether `pid` is `ancestor` itself or one of its descendants by walking up the parent chain.

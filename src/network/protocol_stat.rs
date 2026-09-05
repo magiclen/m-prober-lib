@@ -142,7 +142,7 @@ fn parse_protocol_stat(data: &[u8], stat: &mut ProtocolStat) -> Result<(), Error
     Ok(())
 }
 
-/// Get the IPv4 protocol counters by reading the `/proc/net/snmp` file and the `/proc/net/netstat` file, like the `netstat -s` command. The retransmission ratio and the listen queue overflows these report are the usual first look at a network problem, which the per-interface counters of [`crate::network::get_networks`] cannot show.
+/// Get the protocol counters by reading the `/proc/net/snmp` file and the `/proc/net/netstat` file, like the `netstat -s` command. The `Ip`, `Icmp` and `Udp` counters only cover IPv4, because the kernel keeps the IPv6 ones in the `/proc/net/snmp6` file, while the `Tcp` and `TcpExt` counters cover both address families, because TCP shares one set of counters. The retransmission ratio and the listen queue overflows these report are the usual first look at a network problem, which the per-interface counters of [`crate::network::get_networks`] cannot show.
 ///
 /// ```rust
 /// use mprober_lib::network;

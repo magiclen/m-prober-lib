@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Error,
-    utils::{read_sysfs_number, read_sysfs_string},
+    utils::{read_sysfs_micro, read_sysfs_milli, read_sysfs_number, read_sysfs_string},
 };
 
 /// One temperature sensor of a hardware monitoring device.
@@ -73,16 +73,6 @@ pub struct Current {
     pub max:     Option<f64>,
 }
 
-/// One energy sensor of a hardware monitoring device, which counts up as energy is consumed.
-#[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Energy {
-    /// The label of the sensor.
-    pub label:   Option<String>,
-    /// The energy consumed so far in joules.
-    pub current: f64,
-}
-
 /// One humidity sensor of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -91,16 +81,6 @@ pub struct Humidity {
     pub label:   Option<String>,
     /// The relative humidity in percent.
     pub current: f64,
-}
-
-/// One chassis intrusion detector of a hardware monitoring device.
-#[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Intrusion {
-    /// The label of the detector.
-    pub label: Option<String>,
-    /// Whether the chassis was opened. It stays set until an administrator clears it.
-    pub alarm: bool,
 }
 
 /// One hardware monitoring device under `/sys/class/hwmon`.
@@ -121,30 +101,14 @@ pub struct HwmonDevice {
     pub powers:       Vec<Power>,
     /// The current sensors of this device, ordered by their sensor number.
     pub currents:     Vec<Current>,
-    /// The energy sensors of this device, ordered by their sensor number.
-    pub energies:     Vec<Energy>,
     /// The humidity sensors of this device, ordered by their sensor number.
     pub humidities:   Vec<Humidity>,
-    /// The chassis intrusion detectors of this device, ordered by their sensor number.
-    pub intrusions:   Vec<Intrusion>,
 }
 
 /// Extract `N` from a file name like `tempN_input`.
 #[inline]
 fn parse_sensor_index(file_name: &str, kind: &str, suffix: &str) -> Option<usize> {
     file_name.strip_prefix(kind)?.strip_suffix(suffix)?.parse().ok()
-}
-
-/// Read a value that the driver reports in thousandths, like millidegrees or millivolts.
-#[inline]
-fn read_milli<P: AsRef<Path>>(path: P) -> Option<f64> {
-    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1000.0)
-}
-
-/// Read a value that the driver reports in millionths, like microwatts.
-#[inline]
-fn read_micro<P: AsRef<Path>>(path: P) -> Option<f64> {
-    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1_000_000.0)
 }
 
 #[derive(Default)]
@@ -154,9 +118,7 @@ struct SensorIndices {
     voltages:     Vec<usize>,
     powers:       Vec<usize>,
     currents:     Vec<usize>,
-    energies:     Vec<usize>,
     humidities:   Vec<usize>,
-    intrusions:   Vec<usize>,
 }
 
 fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
@@ -180,12 +142,8 @@ fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
             indices.fans.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "curr", "_input") {
             indices.currents.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "energy", "_input") {
-            indices.energies.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "humidity", "_input") {
             indices.humidities.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "intrusion", "_alarm") {
-            indices.intrusions.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "in", "_input") {
             indices.voltages.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "power", "_input")
@@ -201,9 +159,7 @@ fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
     indices.voltages.sort_unstable();
     indices.powers.sort_unstable();
     indices.currents.sort_unstable();
-    indices.energies.sort_unstable();
     indices.humidities.sort_unstable();
-    indices.intrusions.sort_unstable();
 
     // A power sensor may have both an `_input` file and an `_average` file.
     indices.powers.dedup();
@@ -225,15 +181,15 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
 
     for index in indices.temperatures {
         // A sensor whose input cannot be read (e.g. `ENODATA`) is skipped.
-        let Some(current) = read_milli(device_path.join(format!("temp{index}_input"))) else {
+        let Some(current) = read_sysfs_milli(device_path.join(format!("temp{index}_input"))) else {
             continue;
         };
 
         temperatures.push(Temperature {
             label: read_sysfs_string(device_path.join(format!("temp{index}_label"))).ok(),
             current,
-            max: read_milli(device_path.join(format!("temp{index}_max"))),
-            critical: read_milli(device_path.join(format!("temp{index}_crit"))),
+            max: read_sysfs_milli(device_path.join(format!("temp{index}_max"))),
+            critical: read_sysfs_milli(device_path.join(format!("temp{index}_crit"))),
         });
     }
 
@@ -254,23 +210,23 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
     let mut voltages = Vec::with_capacity(indices.voltages.len());
 
     for index in indices.voltages {
-        let Some(current) = read_milli(device_path.join(format!("in{index}_input"))) else {
+        let Some(current) = read_sysfs_milli(device_path.join(format!("in{index}_input"))) else {
             continue;
         };
 
         voltages.push(Voltage {
             label: read_sysfs_string(device_path.join(format!("in{index}_label"))).ok(),
             current,
-            min: read_milli(device_path.join(format!("in{index}_min"))),
-            max: read_milli(device_path.join(format!("in{index}_max"))),
+            min: read_sysfs_milli(device_path.join(format!("in{index}_min"))),
+            max: read_sysfs_milli(device_path.join(format!("in{index}_max"))),
         });
     }
 
     let mut powers = Vec::with_capacity(indices.powers.len());
 
     for index in indices.powers {
-        let Some(current) = read_micro(device_path.join(format!("power{index}_input")))
-            .or_else(|| read_micro(device_path.join(format!("power{index}_average"))))
+        let Some(current) = read_sysfs_micro(device_path.join(format!("power{index}_input")))
+            .or_else(|| read_sysfs_micro(device_path.join(format!("power{index}_average"))))
         else {
             continue;
         };
@@ -278,7 +234,7 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
         powers.push(Power {
             label: read_sysfs_string(device_path.join(format!("power{index}_label"))).ok(),
             current,
-            cap: read_micro(device_path.join(format!("power{index}_cap"))),
+            cap: read_sysfs_micro(device_path.join(format!("power{index}_cap"))),
         });
     }
 
@@ -286,29 +242,15 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
 
     for index in indices.currents {
         // The driver reports a current in milliamperes.
-        let Some(current) = read_milli(device_path.join(format!("curr{index}_input"))) else {
+        let Some(current) = read_sysfs_milli(device_path.join(format!("curr{index}_input"))) else {
             continue;
         };
 
         currents.push(Current {
             label: read_sysfs_string(device_path.join(format!("curr{index}_label"))).ok(),
             current,
-            min: read_milli(device_path.join(format!("curr{index}_min"))),
-            max: read_milli(device_path.join(format!("curr{index}_max"))),
-        });
-    }
-
-    let mut energies = Vec::with_capacity(indices.energies.len());
-
-    for index in indices.energies {
-        // The driver reports an energy in microjoules.
-        let Some(current) = read_micro(device_path.join(format!("energy{index}_input"))) else {
-            continue;
-        };
-
-        energies.push(Energy {
-            label: read_sysfs_string(device_path.join(format!("energy{index}_label"))).ok(),
-            current,
+            min: read_sysfs_milli(device_path.join(format!("curr{index}_min"))),
+            max: read_sysfs_milli(device_path.join(format!("curr{index}_max"))),
         });
     }
 
@@ -316,28 +258,14 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
 
     for index in indices.humidities {
         // The driver reports a humidity in thousandths of a percent.
-        let Some(current) = read_milli(device_path.join(format!("humidity{index}_input"))) else {
+        let Some(current) = read_sysfs_milli(device_path.join(format!("humidity{index}_input")))
+        else {
             continue;
         };
 
         humidities.push(Humidity {
             label: read_sysfs_string(device_path.join(format!("humidity{index}_label"))).ok(),
             current,
-        });
-    }
-
-    let mut intrusions = Vec::with_capacity(indices.intrusions.len());
-
-    for index in indices.intrusions {
-        let Ok(alarm) =
-            read_sysfs_number::<u8, _>(device_path.join(format!("intrusion{index}_alarm")))
-        else {
-            continue;
-        };
-
-        intrusions.push(Intrusion {
-            label: read_sysfs_string(device_path.join(format!("intrusion{index}_label"))).ok(),
-            alarm: alarm == 1,
         });
     }
 
@@ -349,9 +277,7 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
         voltages,
         powers,
         currents,
-        energies,
         humidities,
-        intrusions,
     })
 }
 

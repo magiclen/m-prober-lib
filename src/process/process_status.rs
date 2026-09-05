@@ -1,9 +1,11 @@
-use std::{
-    io::{self, ErrorKind},
-    path::Path,
-};
+use std::io::{self, ErrorKind};
 
-use crate::{Error, scanner_rust::ScannerU8SliceAscii, utils::read_single_record_file};
+use scanner_rust::ScannerU8SliceAscii;
+
+use crate::{
+    Error,
+    utils::{proc_pid_path, read_single_record_file},
+};
 
 /// Fields read from the `/proc/PID/status` file. Memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
@@ -26,9 +28,9 @@ pub struct ProcessStatus {
     /// The filesystem GID.
     pub fs_gid:                     u32,
     /// The peak resident set size (`VmHWM`) in bytes.
-    pub vm_hwm:                     usize,
+    pub vm_hwm:                     u64,
     /// The swapped-out memory size (`VmSwap`) in bytes. Swapped-out shmem is not included.
-    pub vm_swap:                    usize,
+    pub vm_swap:                    u64,
     /// The number of voluntary context switches.
     pub voluntary_ctxt_switches:    u64,
     /// The number of involuntary context switches.
@@ -67,11 +69,11 @@ fn parse_process_status(data: &[u8], stop_at_threads: bool) -> Result<ProcessSta
             },
             b"VmHWM:" => {
                 status.vm_hwm =
-                    sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
             },
             b"VmSwap:" => {
                 status.vm_swap =
-                    sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
             },
             b"voluntary_ctxt_switches:" => {
                 status.voluntary_ctxt_switches =
@@ -105,7 +107,7 @@ pub fn get_process_status(pid: u32) -> Result<ProcessStatus, Error> {
 
 /// Read a `/proc/PID/status` file. The context switch counters are the last two lines of the file, so a caller that does not need them can skip the second half of the parsing.
 pub(crate) fn read_process_status(pid: u32, stop_at_threads: bool) -> Result<ProcessStatus, Error> {
-    let status_path = Path::new("/proc").join(pid.to_string()).join("status");
+    let status_path = proc_pid_path(pid).join("status");
 
     // The kernel generates the whole file at once and it is about 1.5 KB, so one read normally gets everything.
     let data = read_single_record_file(status_path, 2048)?;

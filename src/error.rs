@@ -5,7 +5,7 @@ use std::{
     num::{ParseFloatError, ParseIntError},
 };
 
-use crate::scanner_rust::ScannerError;
+use scanner_rust::ScannerError;
 
 /// The error type of this crate. The variants match those of `ScannerError`, which this crate used before v0.2.
 #[derive(Debug)]

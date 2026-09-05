@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{self, ErrorKind, Read},
-    path::Path,
+    path::{Path, PathBuf},
     str::{FromStr, from_utf8},
     time::Duration,
 };
@@ -95,6 +95,30 @@ where
     let data = read_single_record_file(path, 64)?;
 
     parse_number(data.trim_ascii_end())
+}
+
+/// Read a sysfs value that the driver reports in thousandths, like millidegrees or millivolts.
+#[inline]
+pub(crate) fn read_sysfs_milli<P: AsRef<Path>>(path: P) -> Option<f64> {
+    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1000.0)
+}
+
+/// Read a sysfs value that the driver reports in millionths, like microwatts or microvolts.
+#[inline]
+pub(crate) fn read_sysfs_micro<P: AsRef<Path>>(path: P) -> Option<f64> {
+    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1_000_000.0)
+}
+
+/// Build the path of the `/proc/PID` folder of a process.
+#[inline]
+pub(crate) fn proc_pid_path(pid: u32) -> PathBuf {
+    Path::new("/proc").join(pid.to_string())
+}
+
+/// Check that a name from the caller is a single path component, so that it cannot escape the folder it is joined to.
+#[inline]
+pub(crate) fn is_single_path_component(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains('/')
 }
 
 /// Read a whole file into a `Vec` with a pre-allocated capacity. Multi-record files in `/proc` (e.g. `/proc/cpuinfo`) return at most one page per read, so this reads until EOF.

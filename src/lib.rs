@@ -60,6 +60,7 @@ println!("{:#?}", power_supply::get_power_supplies().unwrap());
 let cgroup_path = cgroup::get_cgroup_path().unwrap();
 println!("{:#?}", cgroup::get_cgroup_cpu(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_memory(&cgroup_path).unwrap());
+println!("{:#?}", cgroup::get_cgroup_memory_stat(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_memory_events(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_pids(&cgroup_path).unwrap());
 println!("{:#?}", cgroup::get_cgroup_io(&cgroup_path).unwrap());
@@ -110,8 +111,6 @@ cargo bench
 #[cfg(not(target_os = "linux"))]
 compile_error!("mprober-lib reads the `/proc` and `/sys` file systems, so it only supports Linux.");
 
-pub extern crate scanner_rust;
-
 mod error;
 mod functions;
 mod utils;
@@ -124,7 +123,7 @@ pub mod cgroup;
 pub mod cpu;
 /// The hostname of the system.
 pub mod hostname;
-/// Temperature, fan, voltage, power, current, energy and humidity sensors, like the `sensors` command.
+/// Temperature, fan, voltage, power, current and humidity sensors, like the `sensors` command.
 pub mod hwmon;
 /// The kernel version, the `uname` fields, the file handle usage, the boot parameters and the taint flags.
 pub mod kernel;
@@ -151,5 +150,3 @@ pub mod volume;
 
 pub use error::*;
 pub use functions::*;
-/// The error type this crate used before v0.2. It is kept for migration; every function now returns [`Error`].
-pub use scanner_rust::ScannerError;

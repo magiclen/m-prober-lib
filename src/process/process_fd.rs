@@ -1,6 +1,6 @@
-use std::{fs, path::Path};
+use std::fs;
 
-use crate::Error;
+use crate::{Error, utils::proc_pid_path};
 
 /// Get the number of open file descriptors of a specific process found by ID by counting the entries of the `/proc/PID/fd` folder. Reading the folder of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned. For the current process, the descriptor used for counting is included.
 ///
@@ -12,7 +12,7 @@ use crate::Error;
 /// println!("{fd_count}");
 /// ```
 pub fn get_process_fd_count(pid: u32) -> Result<usize, Error> {
-    let fd_path = Path::new("/proc").join(pid.to_string()).join("fd");
+    let fd_path = proc_pid_path(pid).join("fd");
 
     let mut count = 0;
 

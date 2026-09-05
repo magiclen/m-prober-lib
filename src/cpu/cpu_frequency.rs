@@ -23,8 +23,8 @@ pub struct CPUFrequency {
     pub scaling_max_mhz: f64,
     /// The governor in use, e.g. `powersave`, `performance` or `schedutil` (`scaling_governor`).
     pub governor:        String,
-    /// The cpufreq driver in use, e.g. `intel_pstate`, `acpi-cpufreq` or `cppc_cpufreq` (`scaling_driver`).
-    pub driver:          String,
+    /// The cpufreq driver in use, e.g. `intel_pstate`, `acpi-cpufreq` or `cppc_cpufreq` (`scaling_driver`). It is `None` when the driver cannot be read.
+    pub driver:          Option<String>,
 }
 
 /// Get the frequency information of a logical processor by reading files in the `/sys/devices/system/cpu/cpuN/cpufreq` folder. The folder does not exist when the kernel has no cpufreq driver for the platform (e.g. in many virtual machines), so a `NotFound` error is returned then.
@@ -54,7 +54,7 @@ pub fn get_cpu_frequency(cpu: usize) -> Result<CPUFrequency, Error> {
 
     let governor = read_sysfs_string(path.join("scaling_governor"))?;
 
-    let driver = read_sysfs_string(path.join("scaling_driver")).unwrap_or_default();
+    let driver = read_sysfs_string(path.join("scaling_driver")).ok();
 
     Ok(CPUFrequency {
         current_mhz,

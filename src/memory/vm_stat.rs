@@ -1,6 +1,8 @@
 use std::io::{self, ErrorKind};
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use scanner_rust::ScannerAscii;
+
+use crate::Error;
 
 /// Paging counters read from the `/proc/vmstat` file.
 #[derive(Default, Debug, Clone)]

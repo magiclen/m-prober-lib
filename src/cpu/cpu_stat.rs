@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{Error, cpu::CPUTime, scanner_rust::ScannerAscii};
+use scanner_rust::ScannerAscii;
+
+use crate::{Error, cpu::CPUTime};
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]

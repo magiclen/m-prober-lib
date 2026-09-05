@@ -1,8 +1,9 @@
 use std::io::{self, ErrorKind};
 
 use chrono::prelude::*;
+use scanner_rust::ScannerAscii;
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use crate::Error;
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file. The RTC is normally set to UTC, but the file carries no timezone, so a `NaiveDateTime` is returned. The file only exists when an RTC driver is loaded, which is not the case in most containers.
 ///

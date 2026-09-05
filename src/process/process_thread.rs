@@ -1,9 +1,9 @@
-use std::{fs, path::Path};
+use std::fs;
 
 use crate::{
     Error,
     process::{ProcessStat, process_stat::parse_process_stat},
-    utils::read_single_record_file,
+    utils::{proc_pid_path, read_single_record_file},
 };
 
 /// Get the thread IDs of a specific process found by ID by reading the `/proc/PID/task` folder. The main thread is included, and its ID equals the PID.
@@ -16,7 +16,7 @@ use crate::{
 /// println!("{tids:?}");
 /// ```
 pub fn get_process_thread_ids(pid: u32) -> Result<Vec<u32>, Error> {
-    let task_path = Path::new("/proc").join(pid.to_string()).join("task");
+    let task_path = proc_pid_path(pid).join("task");
 
     let mut tids = Vec::with_capacity(1);
 
@@ -49,8 +49,7 @@ pub fn get_process_thread_ids(pid: u32) -> Result<Vec<u32>, Error> {
 /// println!("{thread_stat:#?}");
 /// ```
 pub fn get_thread_stat(pid: u32, tid: u32) -> Result<ProcessStat, Error> {
-    let stat_path =
-        Path::new("/proc").join(pid.to_string()).join("task").join(tid.to_string()).join("stat");
+    let stat_path = proc_pid_path(pid).join("task").join(tid.to_string()).join("stat");
 
     let line = read_single_record_file(stat_path, 1024)?;
 

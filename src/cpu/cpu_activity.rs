@@ -1,6 +1,8 @@
 use std::io::{self, ErrorKind};
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use scanner_rust::ScannerAscii;
+
+use crate::Error;
 
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
