@@ -54,7 +54,9 @@ mod utils;
 
 /// The boot time of the system.
 pub mod btime;
-/// CPU models, per-CPU time counters and system-wide scheduler counters.
+/// The resource usage and limits of a cgroup (v2), e.g. the limits of the container the process runs in.
+pub mod cgroup;
+/// CPU models, frequencies, per-CPU time counters and system-wide scheduler counters.
 pub mod cpu;
 /// The hostname of the system.
 pub mod hostname;
@@ -66,8 +68,10 @@ pub mod kernel;
 pub mod load_average;
 /// Memory and swap usage, like the `free` command, and the paging counters of the `vmstat` command.
 pub mod memory;
-/// Network interfaces, their counters and their link information.
+/// Network interfaces, their counters, their link information, their IP addresses and the socket usage.
 pub mod network;
+/// Batteries and power adapters.
+pub mod power_supply;
 /// PSI (Pressure Stall Information) for CPU, memory and I/O.
 pub mod pressure;
 /// Running processes, their stats and their I/O counters.
