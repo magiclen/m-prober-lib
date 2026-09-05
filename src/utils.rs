@@ -53,6 +53,32 @@ pub(crate) fn unescape_octal(data: &[u8]) -> Vec<u8> {
     result
 }
 
+/// Parse a CPU list like `0-3,8`, which is the format sysfs uses for `cpulist` and `cpuset.cpus`.
+pub(crate) fn parse_cpu_list(list: &str) -> Vec<usize> {
+    let mut cpus = Vec::new();
+
+    for part in list.trim().split(',') {
+        if part.is_empty() {
+            continue;
+        }
+
+        match part.split_once('-') {
+            Some((start, end)) => {
+                if let (Ok(start), Ok(end)) = (start.parse::<usize>(), end.parse::<usize>()) {
+                    cpus.extend(start..=end);
+                }
+            },
+            None => {
+                if let Ok(cpu) = part.parse() {
+                    cpus.push(cpu);
+                }
+            },
+        }
+    }
+
+    cpus
+}
+
 /// Read a small sysfs file and return its content without the trailing whitespace.
 #[inline]
 pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
@@ -161,6 +187,14 @@ pub(crate) fn clock_ticks_to_duration(ticks: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_cpu_lists() {
+        assert_eq!(vec![0, 1, 2, 3, 8], parse_cpu_list("0-3,8"));
+        assert_eq!(vec![5], parse_cpu_list("5\n"));
+        assert_eq!(vec![0, 1, 4, 5, 6], parse_cpu_list("0-1,4-6"));
+        assert!(parse_cpu_list("").is_empty());
+    }
 
     #[test]
     fn unescape_octal_sequences() {

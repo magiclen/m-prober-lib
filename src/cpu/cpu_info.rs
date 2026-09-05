@@ -6,12 +6,14 @@ use std::{
 
 use crate::{
     Error,
+    cpu::cpu_topology::package_topology,
     utils::{parse_number, read_file, read_sysfs_number},
 };
 
 /// One physical CPU package, built from the `processor` blocks of the `/proc/cpuinfo` file that share a `physical id`.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CPU {
     /// The `physical id` of this package. It is `0` on platforms that do not report one.
     pub physical_id: usize,
@@ -94,9 +96,22 @@ fn flush_processor_block(block: ProcessorBlock, builders: &mut BTreeMap<usize, C
     }
 }
 
+/// The result of parsing `/proc/cpuinfo`.
+struct CPUInfo {
+    /// Each CPU with the numbers of its logical processors.
+    cpus:            Vec<(CPU, Vec<usize>)>,
+    /// Whether the file reported a `physical id`, which platforms like ARM do not.
+    has_physical_id: bool,
+    /// Whether the file reported a `core id`, which platforms like ARM do not.
+    has_core_id:     bool,
+}
+
 /// Parse the content of `/proc/cpuinfo`. Each CPU is returned with the numbers of its logical processors.
-fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, Error> {
+fn parse_cpuinfo(data: &[u8]) -> Result<CPUInfo, Error> {
     let mut builders: BTreeMap<usize, CPUBuilder> = BTreeMap::new();
+
+    let mut has_physical_id = false;
+    let mut has_core_id = false;
 
     let mut block = ProcessorBlock::default();
 
@@ -117,10 +132,18 @@ fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, Error> {
             },
             b"model name" => block.model_name = Some(value),
             b"cpu MHz" => block.mhz = Some(parse_number(value)?),
-            b"physical id" => block.physical_id = Some(parse_number(value)?),
+            b"physical id" => {
+                has_physical_id = true;
+
+                block.physical_id = Some(parse_number(value)?);
+            },
             b"siblings" => block.siblings = Some(parse_number(value)?),
             b"cpu cores" => block.cpu_cores = Some(parse_number(value)?),
-            b"core id" => block.core_id = Some(parse_number(value)?),
+            b"core id" => {
+                has_core_id = true;
+
+                block.core_id = Some(parse_number(value)?);
+            },
             _ => (),
         }
     }
@@ -149,10 +172,38 @@ fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, Error> {
         })
         .collect();
 
-    Ok(cpus)
+    Ok(CPUInfo {
+        cpus,
+        has_physical_id,
+        has_core_id,
+    })
 }
 
-/// Get CPU information by reading the `/proc/cpuinfo` file. If the file does not report `cpu MHz` (e.g. on ARM), the frequencies are read from the `/sys/devices/system/cpu/cpuN/cpufreq/scaling_cur_freq` files instead.
+/// Rebuild the packages from the sysfs topology, which is the only source on a platform whose `/proc/cpuinfo` reports no `physical id`. The model name and the frequencies of the single package the parsing produced are spread over the real packages.
+fn regroup_by_sysfs_topology(cpus: &[(CPU, Vec<usize>)]) -> Option<Vec<(CPU, Vec<usize>)>> {
+    let packages = package_topology()?;
+
+    // Only a file without `physical id` reaches this point, so the parsing produced exactly one package.
+    let (template, _) = cpus.first()?;
+
+    let mut result = Vec::with_capacity(packages.len());
+
+    for (physical_id, (processors, core_ids)) in packages {
+        let cpu = CPU {
+            physical_id,
+            model_name: template.model_name.clone(),
+            cpus_mhz: Vec::new(),
+            siblings: processors.len(),
+            cpu_cores: core_ids.len(),
+        };
+
+        result.push((cpu, processors));
+    }
+
+    Some(result)
+}
+
+/// Get CPU information by reading the `/proc/cpuinfo` file. If the file does not report `cpu MHz` (e.g. on ARM), the frequencies are read from the `/sys/devices/system/cpu/cpuN/cpufreq/scaling_cur_freq` files instead, and if it reports neither `physical id` nor `core id`, the packages and the cores come from the `/sys/devices/system/cpu/cpuN/topology` folders.
 ///
 /// ```rust
 /// use mprober_lib::cpu;
@@ -164,7 +215,16 @@ fn parse_cpuinfo(data: &[u8]) -> Result<Vec<(CPU, Vec<usize>)>, Error> {
 pub fn get_cpus() -> Result<Vec<CPU>, Error> {
     let data = read_file("/proc/cpuinfo", 64 * 1024)?;
 
-    let cpus = parse_cpuinfo(&data)?;
+    let cpu_info = parse_cpuinfo(&data)?;
+
+    let mut cpus = cpu_info.cpus;
+
+    if !cpu_info.has_physical_id
+        && !cpu_info.has_core_id
+        && let Some(regrouped) = regroup_by_sysfs_topology(&cpus)
+    {
+        cpus = regrouped;
+    }
 
     let mut result = Vec::with_capacity(cpus.len());
 
@@ -261,7 +321,12 @@ Model\t\t: Raspberry Pi 4 Model B Rev 1.4
 
     #[test]
     fn parse_x86() {
-        let cpus = parse_cpuinfo(X86_CPUINFO).unwrap();
+        let cpu_info = parse_cpuinfo(X86_CPUINFO).unwrap();
+
+        assert!(cpu_info.has_physical_id);
+        assert!(cpu_info.has_core_id);
+
+        let cpus = cpu_info.cpus;
 
         assert_eq!(2, cpus.len());
 
@@ -283,7 +348,13 @@ Model\t\t: Raspberry Pi 4 Model B Rev 1.4
 
     #[test]
     fn parse_aarch64() {
-        let cpus = parse_cpuinfo(AARCH64_CPUINFO).unwrap();
+        let cpu_info = parse_cpuinfo(AARCH64_CPUINFO).unwrap();
+
+        // This file reports neither, so `get_cpus` falls back to the sysfs topology.
+        assert!(!cpu_info.has_physical_id);
+        assert!(!cpu_info.has_core_id);
+
+        let cpus = cpu_info.cpus;
 
         assert_eq!(1, cpus.len());
 
