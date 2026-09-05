@@ -113,7 +113,11 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
 
     stat.starttime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.vsize = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.rss = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
+
+    // the `rss` field is read from the `statm` file later, in order to keep it consistent with the
+    // `shared` field
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
     stat.rsslim = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     for _ in 0..13 {
@@ -129,10 +133,9 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
 
     let mut sc: Scanner<_, 32> = Scanner::scan_path2(statm_path)?;
 
-    for _ in 0..2 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    }
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
+    stat.rss = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
     stat.shared =
         sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
 
