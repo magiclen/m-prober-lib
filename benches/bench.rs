@@ -105,14 +105,6 @@ fn get_all_cpu_topologies(bencher: &mut Bencher) {
     bench_if_available(bencher, cpu::get_all_cpu_topologies);
 }
 
-fn get_interrupt_stats(bencher: &mut Bencher) {
-    bench_if_available(bencher, cpu::get_interrupt_stats);
-}
-
-fn get_softirq_stats(bencher: &mut Bencher) {
-    bench_if_available(bencher, cpu::get_softirq_stats);
-}
-
 fn get_hostname(bencher: &mut Bencher) {
     bencher.iter(|| hostname::get_hostname().unwrap());
 }
@@ -133,20 +125,8 @@ fn get_file_nr(bencher: &mut Bencher) {
     bencher.iter(|| kernel::get_file_nr().unwrap());
 }
 
-fn get_inode_nr(bencher: &mut Bencher) {
-    bench_if_available(bencher, kernel::get_inode_nr);
-}
-
-fn get_entropy_available(bencher: &mut Bencher) {
-    bench_if_available(bencher, kernel::get_entropy_available);
-}
-
 fn get_kernel_cmdline(bencher: &mut Bencher) {
     bench_if_available(bencher, kernel::get_kernel_cmdline);
-}
-
-fn get_modules(bencher: &mut Bencher) {
-    bench_if_available(bencher, kernel::get_modules);
 }
 
 fn get_load_average(bencher: &mut Bencher) {
@@ -201,16 +181,8 @@ fn get_routes(bencher: &mut Bencher) {
     bench_if_available(bencher, network::get_routes);
 }
 
-fn get_wireless(bencher: &mut Bencher) {
-    bencher.iter(|| network::get_wireless().unwrap());
-}
-
 fn get_power_supplies(bencher: &mut Bencher) {
     bencher.iter(|| power_supply::get_power_supplies().unwrap());
-}
-
-fn get_power_cap_zones(bencher: &mut Bencher) {
-    bencher.iter(|| power_supply::get_power_cap_zones().unwrap());
 }
 
 fn get_cpu_pressure(bencher: &mut Bencher) {
@@ -261,12 +233,6 @@ fn get_process_threads(bencher: &mut Bencher) {
     bencher.iter(|| process::get_process_threads(pid).unwrap());
 }
 
-fn get_process_sched_stat(bencher: &mut Bencher) {
-    let pid = std::process::id();
-
-    bench_if_available(bencher, || process::get_process_sched_stat(pid));
-}
-
 fn get_process_oom(bencher: &mut Bencher) {
     let pid = std::process::id();
 
@@ -291,16 +257,8 @@ fn get_boot_id(bencher: &mut Bencher) {
     bench_if_available(bencher, system::get_boot_id);
 }
 
-fn detect_virtualization(bencher: &mut Bencher) {
-    bencher.iter(|| system::detect_virtualization().unwrap());
-}
-
 fn get_uptime(bencher: &mut Bencher) {
     bencher.iter(|| uptime::get_uptime().unwrap());
-}
-
-fn get_mounts(bencher: &mut Bencher) {
-    bencher.iter(|| volume::get_mounts().unwrap());
 }
 
 fn get_mount_infos(bencher: &mut Bencher) {
@@ -350,22 +308,11 @@ benchmark_group!(
     get_available_cpu_count,
     get_cpu_frequency,
     get_all_cpu_frequencies,
-    get_all_cpu_topologies,
-    get_interrupt_stats,
-    get_softirq_stats
+    get_all_cpu_topologies
 );
 benchmark_group!(hostname, get_hostname);
 benchmark_group!(hwmon, get_hwmon_devices);
-benchmark_group!(
-    kernel,
-    get_kernel_version,
-    get_uname,
-    get_file_nr,
-    get_inode_nr,
-    get_entropy_available,
-    get_kernel_cmdline,
-    get_modules
-);
+benchmark_group!(kernel, get_kernel_version, get_uname, get_file_nr, get_kernel_cmdline);
 benchmark_group!(load_average, get_load_average);
 benchmark_group!(memory, free, get_mem_info, get_vm_stat, get_swaps, get_numa_nodes);
 benchmark_group!(
@@ -376,10 +323,9 @@ benchmark_group!(
     get_socket_stat,
     get_protocol_stat,
     get_all_socket_connections,
-    get_routes,
-    get_wireless
+    get_routes
 );
-benchmark_group!(power_supply, get_power_supplies, get_power_cap_zones);
+benchmark_group!(power_supply, get_power_supplies);
 benchmark_group!(pressure, get_cpu_pressure);
 benchmark_group!(
     process,
@@ -392,16 +338,14 @@ benchmark_group!(
     get_process_fd_count,
     get_process_memory,
     get_process_threads,
-    get_process_sched_stat,
     get_process_oom,
     get_process_limits
 );
 benchmark_group!(rtc_time, get_rtc_date_time);
-benchmark_group!(system, get_dmi_info, get_boot_id, detect_virtualization);
+benchmark_group!(system, get_dmi_info, get_boot_id);
 benchmark_group!(uptime, get_uptime);
 benchmark_group!(
     volume,
-    get_mounts,
     get_mount_infos,
     get_volumes,
     get_disk_stats,

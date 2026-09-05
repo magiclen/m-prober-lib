@@ -18,6 +18,25 @@ pub enum Error {
     ParseFloatError(ParseFloatError),
 }
 
+impl Error {
+    /// Whether this error means that the kernel does not provide the data at all, e.g. because the feature was not built into it or the hardware has no such device. It is a `NotFound` I/O error, which every function of this crate returns for a missing `/proc` or `/sys` file, so a probe of an optional feature can be skipped with one call instead of matching on the inner error.
+    ///
+    /// ```rust
+    /// use mprober_lib::pressure;
+    ///
+    /// match pressure::get_cpu_pressure() {
+    ///     Ok(pressure) => println!("{pressure:#?}"),
+    ///     // A kernel built without PSI has no `/proc/pressure` folder.
+    ///     Err(err) if err.is_not_supported() => println!("PSI is not available"),
+    ///     Err(err) => panic!("{err}"),
+    /// }
+    /// ```
+    #[inline]
+    pub fn is_not_supported(&self) -> bool {
+        matches!(self, Error::IOError(err) if err.kind() == io::ErrorKind::NotFound)
+    }
+}
+
 impl Display for Error {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

@@ -5,7 +5,6 @@ mod protocol_stat;
 mod route;
 mod socket_connection;
 mod socket_stat;
-mod wireless;
 
 use std::{
     collections::HashSet,
@@ -22,7 +21,6 @@ pub use protocol_stat::*;
 pub use route::*;
 pub use socket_connection::*;
 pub use socket_stat::*;
-pub use wireless::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 

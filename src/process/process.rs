@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     fs,
     hash::{Hash, Hasher},
-    mem::take,
     path::{Path, PathBuf},
     thread::sleep,
     time::Duration,
@@ -133,12 +132,12 @@ fn tty_name(major: u16, minor: u32) -> Option<String> {
     }
 }
 
-/// Check whether an error means that the process exited during the scan.
-/// The kernel returns `ENOENT` when the `/proc/PID` folder is gone and `ESRCH` when a file in it is read after the process was reaped.
+/// Check whether an error means that a process cannot contribute to the scan, so that the scan goes on with the other processes instead of failing.
+/// The kernel returns `ENOENT` when the `/proc/PID` folder is gone and `ESRCH` when a file in it is read after the process was reaped, and `EACCES` when `/proc` is mounted with `hidepid`, which hides the processes of other users.
 #[inline]
-fn is_process_gone(err: &Error) -> bool {
+fn is_process_unreadable(err: &Error) -> bool {
     if let Error::IOError(err) = err {
-        matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
+        matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH | libc::EACCES))
     } else {
         false
     }
@@ -198,7 +197,8 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let effective_gid = status.effective_gid;
     let state = stat.state;
     let ppid = stat.ppid;
-    let program = take(&mut stat.comm);
+    // The name is cloned rather than taken, so that the `ProcessStat` returned alongside keeps its `comm`.
+    let program = stat.comm.clone();
 
     let tty = tty_cache
         .entry((stat.tty_nr_major, stat.tty_nr_minor))
@@ -314,38 +314,6 @@ pub fn get_process_root(pid: u32) -> Result<PathBuf, Error> {
     Ok(fs::read_link(Path::new("/proc").join(pid.to_string()).join("root"))?)
 }
 
-/// Get the environment variables of a specific process found by ID by reading the `/proc/PID/environ` file. The kernel returns the environment the process was started with, so a variable the process changed afterwards is not reflected. Reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned, and a kernel thread has no environment, so the result is empty for one.
-///
-/// ```rust
-/// use mprober_lib::process;
-///
-/// let environ = process::get_process_environ(std::process::id()).unwrap();
-///
-/// for (name, value) in environ {
-///     println!("{name}={value}");
-/// }
-/// ```
-pub fn get_process_environ(pid: u32) -> Result<Vec<(String, String)>, Error> {
-    let data = fs::read(Path::new("/proc").join(pid.to_string()).join("environ"))?;
-
-    let mut environ = Vec::with_capacity(16);
-
-    // Every entry ends with a NUL, so the split produces one trailing empty slice.
-    for entry in data.split(|&b| b == 0) {
-        let Some(equal_index) = entry.iter().position(|&b| b == b'=') else {
-            continue;
-        };
-
-        // An environment variable is arbitrary bytes, so it may not be valid UTF-8.
-        environ.push((
-            String::from_utf8_lossy(&entry[..equal_index]).into_owned(),
-            String::from_utf8_lossy(&entry[(equal_index + 1)..]).into_owned(),
-        ));
-    }
-
-    Ok(environ)
-}
-
 /// Check whether `pid` is `ancestor` itself or one of its descendants by walking up the parent chain.
 fn is_process_or_descendant(pid: u32, ancestor: u32, pid_ppid_map: &BTreeMap<u32, u32>) -> bool {
     let mut current = pid;
@@ -416,7 +384,7 @@ pub fn get_processes_with_stat(
                 }
             },
             Err(err) => {
-                if is_process_gone(&err) {
+                if is_process_unreadable(&err) {
                     continue;
                 }
 
@@ -498,5 +466,13 @@ mod tests {
 
         // A process that rewrote its argv may leave no trailing NUL.
         assert_eq!("postgres: writer", cmdline_to_string(b"postgres: writer".to_vec()));
+    }
+
+    #[test]
+    fn the_returned_stat_keeps_its_comm() {
+        let (process, stat) = get_process_with_stat(std::process::id()).unwrap();
+
+        assert!(!stat.comm.is_empty());
+        assert_eq!(process.program, stat.comm);
     }
 }

@@ -23,24 +23,24 @@ pub struct PartitionInfo {
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockDeviceInfo {
-    /// Whether the device is a rotational disk (HDD) rather than an SSD or a virtual device.
-    pub rotational:          bool,
-    /// Whether the device is removable, e.g. a USB stick or an optical disc.
-    pub removable:           bool,
-    /// Whether the device is read-only.
-    pub read_only:           bool,
+    /// Whether the device is a rotational disk (HDD) rather than an SSD or a virtual device. It is `None` when the driver does not report it, which is not the same as an SSD.
+    pub rotational:          Option<bool>,
+    /// Whether the device is removable, e.g. a USB stick or an optical disc. It is `None` when the driver does not report it.
+    pub removable:           Option<bool>,
+    /// Whether the device is read-only. It is `None` when the driver does not report it.
+    pub read_only:           Option<bool>,
     /// The size of the device in bytes.
     pub size:                u64,
-    /// The size of the smallest unit the device can address in bytes, which is `512` for most devices.
-    pub logical_block_size:  u64,
-    /// The size of the smallest unit the device can write without a read-modify-write cycle in bytes, e.g. `4096` for an advanced format disk.
-    pub physical_block_size: u64,
+    /// The size of the smallest unit the device can address in bytes, which is `512` for most devices. It is `None` when the driver does not report it.
+    pub logical_block_size:  Option<u64>,
+    /// The size of the smallest unit the device can write without a read-modify-write cycle in bytes, e.g. `4096` for an advanced format disk. It is `None` when the driver does not report it.
+    pub physical_block_size: Option<u64>,
     /// The I/O scheduler in use, e.g. `none`, `mq-deadline` or `bfq`. It is `None` for a device without a request queue, like `dm-0`.
     pub scheduler:           Option<String>,
     /// The number of requests the queue holds at most.
     pub nr_requests:         Option<u64>,
-    /// The number of bytes the device can discard (TRIM) in one request. It is `0` when the device does not support discarding.
-    pub discard_max_bytes:   u64,
+    /// The number of bytes the device can discard (TRIM) in one request, which is `0` when the device does not support discarding. It is `None` when the driver does not report it at all.
+    pub discard_max_bytes:   Option<u64>,
     /// The model name of the disk, e.g. `Samsung SSD 980 PRO 1TB`. It is `None` for virtual devices like `loop0` or `dm-0`.
     pub model:               Option<String>,
     /// The serial number of the disk. It is `None` when the driver does not report one.
@@ -92,7 +92,7 @@ pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo
     // `size` is in 512-byte sectors, regardless of the device's sector size.
     let size = read_sysfs_number::<u64, _>(path.join("size"))? * 512;
 
-    let read_only = read_sysfs_number::<u8, _>(path.join("ro")).is_ok_and(|v| v == 1);
+    let read_only = read_sysfs_number::<u8, _>(path.join("ro")).ok().map(|v| v == 1);
 
     // A partition has no `queue` folder and no `device` link, but `..` of its symlinked folder is its parent disk.
     let partition = match read_sysfs_number::<u32, _>(path.join("partition")) {
@@ -118,21 +118,18 @@ pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo
     let disk_path = if partition.is_some() { path.join("..") } else { path };
 
     let rotational =
-        read_sysfs_number::<u8, _>(disk_path.join("queue/rotational")).is_ok_and(|v| v == 1);
+        read_sysfs_number::<u8, _>(disk_path.join("queue/rotational")).ok().map(|v| v == 1);
 
-    let removable = read_sysfs_number::<u8, _>(disk_path.join("removable")).is_ok_and(|v| v == 1);
+    let removable = read_sysfs_number::<u8, _>(disk_path.join("removable")).ok().map(|v| v == 1);
 
-    let logical_block_size =
-        read_sysfs_number(disk_path.join("queue/logical_block_size")).unwrap_or(512);
-    let physical_block_size = read_sysfs_number(disk_path.join("queue/physical_block_size"))
-        .unwrap_or(logical_block_size);
+    let logical_block_size = read_sysfs_number(disk_path.join("queue/logical_block_size")).ok();
+    let physical_block_size = read_sysfs_number(disk_path.join("queue/physical_block_size")).ok();
 
     let scheduler = read_active_choice(disk_path.join("queue/scheduler"));
 
     let nr_requests = read_sysfs_number(disk_path.join("queue/nr_requests")).ok();
 
-    let discard_max_bytes =
-        read_sysfs_number(disk_path.join("queue/discard_max_bytes")).unwrap_or(0);
+    let discard_max_bytes = read_sysfs_number(disk_path.join("queue/discard_max_bytes")).ok();
 
     // SCSI and NVMe pad the model name with spaces.
     let model = read_sysfs_string(disk_path.join("device/model"))

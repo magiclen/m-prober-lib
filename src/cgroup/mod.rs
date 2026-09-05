@@ -20,9 +20,10 @@ fn find_cgroup2_mount(data: &[u8]) -> Option<(String, String)> {
     for line in data.split(|&b| b == b'\n') {
         let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
 
-        // The mount ID, the parent ID and the device numbers come before the root.
-        let root = fields.nth(3)?;
-        let point = fields.next()?;
+        // The mount ID, the parent ID and the device numbers come before the root. A line with too few fields is skipped instead of ending the search, because the split always yields an empty last line.
+        let (Some(root), Some(point)) = (fields.nth(3), fields.next()) else {
+            continue;
+        };
 
         // The options and a variable number of optional fields follow, terminated by a single hyphen.
         let mut fs_type = None;
@@ -75,20 +76,8 @@ fn resolve_cgroup_path(cgroup_path: &str) -> PathBuf {
     direct
 }
 
-/// Get the path of the cgroup (v2) that a specific process found by ID belongs to, by reading the `/proc/PID/cgroup` file. A `NotFound` error is returned when the process is not in a cgroup v2 hierarchy.
-///
-/// ```rust
-/// use mprober_lib::cgroup;
-///
-/// let cgroup_path = cgroup::get_process_cgroup_path(1).unwrap();
-///
-/// println!("{}", cgroup_path.display());
-/// ```
-pub fn get_process_cgroup_path(pid: u32) -> Result<PathBuf, Error> {
-    let cgroup_file = Path::new("/proc").join(pid.to_string()).join("cgroup");
-
-    let data = read_single_record_file(cgroup_file, 512)?;
-
+/// Find the cgroup v2 line in the content of a `/proc/PID/cgroup` file and resolve it to a path in the mount namespace of the current process.
+fn find_cgroup2_path(data: &[u8]) -> Result<PathBuf, Error> {
     // The cgroup v2 line looks like `0::/user.slice/user-1000.slice`, while a cgroup v1 line has a controller list between the colons instead.
     for line in data.split(|&b| b == b'\n') {
         if let Some(path) = line.strip_prefix(b"0::") {
@@ -101,6 +90,21 @@ pub fn get_process_cgroup_path(pid: u32) -> Result<PathBuf, Error> {
     Err(io::Error::new(ErrorKind::NotFound, "the process is not in a cgroup v2 hierarchy").into())
 }
 
+/// Get the path of the cgroup (v2) that a specific process found by ID belongs to, by reading the `/proc/PID/cgroup` file. A `NotFound` error is returned when the process is not in a cgroup v2 hierarchy.
+///
+/// ```rust
+/// use mprober_lib::cgroup;
+///
+/// let cgroup_path = cgroup::get_process_cgroup_path(1).unwrap();
+///
+/// println!("{}", cgroup_path.display());
+/// ```
+pub fn get_process_cgroup_path(pid: u32) -> Result<PathBuf, Error> {
+    let cgroup_file = Path::new("/proc").join(pid.to_string()).join("cgroup");
+
+    find_cgroup2_path(&read_single_record_file(cgroup_file, 512)?)
+}
+
 /// Get the path of the cgroup (v2) that the current process belongs to, by reading the `/proc/self/cgroup` file. The path is inside the cgroup v2 mount, e.g. `/sys/fs/cgroup/user.slice/user-1000.slice` on a host, or `/sys/fs/cgroup` itself in a container. A `NotFound` error is returned when the process is not in a cgroup v2 hierarchy.
 ///
 /// ```rust
@@ -111,17 +115,7 @@ pub fn get_process_cgroup_path(pid: u32) -> Result<PathBuf, Error> {
 /// println!("{}", cgroup_path.display());
 /// ```
 pub fn get_cgroup_path() -> Result<PathBuf, Error> {
-    let data = read_single_record_file("/proc/self/cgroup", 512)?;
-
-    for line in data.split(|&b| b == b'\n') {
-        if let Some(path) = line.strip_prefix(b"0::") {
-            let path = String::from_utf8_lossy(path.trim_ascii_end());
-
-            return Ok(resolve_cgroup_path(&path));
-        }
-    }
-
-    Err(io::Error::new(ErrorKind::NotFound, "the process is not in a cgroup v2 hierarchy").into())
+    find_cgroup2_path(&read_single_record_file("/proc/self/cgroup", 512)?)
 }
 
 /// Parse a limit which is either a number or `max`.
@@ -148,12 +142,12 @@ pub struct CgroupMemory {
     pub max:          Option<u64>,
     /// The throttling limit in bytes (`memory.high`), above which the cgroup is put under heavy reclaim pressure instead of being killed. It is `None` when there is no limit.
     pub high:         Option<u64>,
-    /// The best-effort protection in bytes (`memory.low`), below which the memory of the cgroup is not reclaimed while another cgroup can be reclaimed instead.
-    pub low:          u64,
-    /// The hard protection in bytes (`memory.min`), below which the memory of the cgroup is never reclaimed.
-    pub min:          u64,
-    /// The swap used by the cgroup and its descendants in bytes (`memory.swap.current`).
-    pub swap_current: u64,
+    /// The best-effort protection in bytes (`memory.low`), below which the memory of the cgroup is not reclaimed while another cgroup can be reclaimed instead. It is `None` when the file could not be read, which `0` would otherwise be indistinguishable from.
+    pub low:          Option<u64>,
+    /// The hard protection in bytes (`memory.min`), below which the memory of the cgroup is never reclaimed. It is `None` when the file could not be read.
+    pub min:          Option<u64>,
+    /// The swap used by the cgroup and its descendants in bytes (`memory.swap.current`). It is `None` when swap accounting is disabled, which is not the same as no swap being used.
+    pub swap_current: Option<u64>,
     /// The hard swap limit in bytes (`memory.swap.max`). It is `None` when there is no limit.
     pub swap_max:     Option<u64>,
 }
@@ -178,11 +172,11 @@ pub fn get_cgroup_memory<P: AsRef<Path>>(path: P) -> Result<CgroupMemory, Error>
     let peak = read_sysfs_number(path.join("memory.peak")).ok();
 
     let high = read_limit(path.join("memory.high")).unwrap_or(None);
-    let low = read_sysfs_number(path.join("memory.low")).unwrap_or(0);
-    let min = read_sysfs_number(path.join("memory.min")).unwrap_or(0);
+    let low = read_sysfs_number(path.join("memory.low")).ok();
+    let min = read_sysfs_number(path.join("memory.min")).ok();
 
     // The swap files do not exist when swap accounting is disabled.
-    let swap_current = read_sysfs_number(path.join("memory.swap.current")).unwrap_or(0);
+    let swap_current = read_sysfs_number(path.join("memory.swap.current")).ok();
     let swap_max = read_limit(path.join("memory.swap.max")).unwrap_or(None);
 
     Ok(CgroupMemory {
@@ -261,8 +255,8 @@ pub fn get_cgroup_memory_events<P: AsRef<Path>>(path: P) -> Result<CgroupMemoryE
 pub struct CgroupCPU {
     /// The CPU time the cgroup may use in every `period` (`cpu.max`). It is `None` when there is no limit.
     pub quota:        Option<Duration>,
-    /// The length of one accounting period (`cpu.max`), `100ms` by default.
-    pub period:       Duration,
+    /// The length of one accounting period (`cpu.max`), which the kernel defaults to `100ms`. It is `None` when the `cpu.max` file does not exist, so this reports the period the kernel actually holds rather than assuming the default.
+    pub period:       Option<Duration>,
     /// The total CPU time used (`usage_usec`).
     pub usage:        Duration,
     /// The CPU time used in user mode (`user_usec`).
@@ -289,13 +283,14 @@ impl CgroupCPU {
     #[inline]
     pub fn effective_cpu_count(&self) -> Option<f64> {
         let quota = self.quota?;
+        let period = self.period?;
 
-        if self.period.is_zero() {
+        if period.is_zero() {
             return None;
         }
 
         // Both values are whole microseconds in `cpu.max`, so dividing them as such keeps the result exact.
-        Some(quota.as_micros() as f64 / self.period.as_micros() as f64)
+        Some(quota.as_micros() as f64 / period.as_micros() as f64)
     }
 }
 
@@ -332,7 +327,7 @@ fn parse_cpu_stat(data: &[u8], cpu: &mut CgroupCPU) -> Result<(), Error> {
     Ok(())
 }
 
-/// Get the CPU usage and limits of the cgroup at `path` by reading the `cpu.max` file and the `cpu.stat` file in it. The `cpu.max` file does not exist in the root cgroup, or when the CPU controller is not enabled for the cgroup, which means there is no limit.
+/// Get the CPU usage and limits of the cgroup at `path` by reading the `cpu.max` file and the `cpu.stat` file in it. The `cpu.max` file does not exist in the root cgroup, or when the CPU controller is not enabled for the cgroup, which means there is no limit and leaves both `quota` and `period` as `None`.
 ///
 /// ```rust
 /// use mprober_lib::cgroup;
@@ -345,13 +340,15 @@ fn parse_cpu_stat(data: &[u8], cpu: &mut CgroupCPU) -> Result<(), Error> {
 pub fn get_cgroup_cpu<P: AsRef<Path>>(path: P) -> Result<CgroupCPU, Error> {
     let path = path.as_ref();
 
-    let mut cpu = CgroupCPU {
-        period: Duration::from_millis(100),
-        ..CgroupCPU::default()
-    };
+    let mut cpu = CgroupCPU::default();
 
     match read_single_record_file(path.join("cpu.max"), 64) {
-        Ok(data) => (cpu.quota, cpu.period) = parse_cpu_max(&data)?,
+        Ok(data) => {
+            let (quota, period) = parse_cpu_max(&data)?;
+
+            cpu.quota = quota;
+            cpu.period = Some(period);
+        },
         Err(err) if err.kind() == ErrorKind::NotFound => (),
         Err(err) => return Err(err.into()),
     }
@@ -557,6 +554,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn find_cgroup2_mount_after_a_short_line() {
+        // The cgroup2 line comes after a truncated one, which must not end the search.
+        const MOUNTINFO: &[u8] =
+            b"23 28 0:22 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+truncated
+30 28 0:26 /subtree /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime - cgroup2 cgroup2 rw,nsdelegate
+";
+
+        assert_eq!(
+            Some((String::from("/subtree"), String::from("/sys/fs/cgroup"))),
+            find_cgroup2_mount(MOUNTINFO)
+        );
+
+        assert_eq!(None, find_cgroup2_mount(b"truncated\n"));
+    }
+
+    #[test]
     fn parse_limits() {
         assert_eq!(None, parse_limit("max").unwrap());
         assert_eq!(Some(1073741824), parse_limit("1073741824").unwrap());
@@ -668,11 +682,19 @@ oom_group_kill 0
     fn effective_cpu_count() {
         let cpu = CgroupCPU {
             quota: Some(Duration::from_millis(150)),
-            period: Duration::from_millis(100),
+            period: Some(Duration::from_millis(100)),
             ..CgroupCPU::default()
         };
 
         assert_eq!(Some(1.5), cpu.effective_cpu_count());
         assert_eq!(None, CgroupCPU::default().effective_cpu_count());
+
+        // Without a `cpu.max` file there is no period to divide by, so no count can be computed.
+        let without_period = CgroupCPU {
+            quota: Some(Duration::from_millis(150)),
+            ..CgroupCPU::default()
+        };
+
+        assert_eq!(None, without_period.effective_cpu_count());
     }
 }

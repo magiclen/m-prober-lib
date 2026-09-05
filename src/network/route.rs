@@ -192,7 +192,9 @@ pub fn get_routes() -> Result<Vec<Route>, Error> {
     Ok(routes)
 }
 
-/// Get the default routes, which are the ones that cover every destination, ordered by their metric so that the preferred one comes first. There is normally one for IPv4 and one for IPv6. The unreachable fallback entries the kernel keeps for an address family that has no real route are left out, so an empty result means nothing is routed off this host.
+/// Get the default routes, which are the ones that cover every destination, ordered by their metric so that the preferred one comes first. There is normally one for IPv4 and one for IPv6. The unreachable fallback entries the kernel keeps for an address family that has no real route are left out.
+///
+/// The files this reads only hold the main routing table, so a host that sends its traffic through a policy rule (`ip rule`) or another table, as a VPN normally does, legitimately has no default route here.
 ///
 /// ```rust
 /// use mprober_lib::network;

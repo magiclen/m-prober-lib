@@ -114,7 +114,7 @@ fn parse_mount_infos(data: &[u8]) -> Result<Vec<MountInfo>, Error> {
     Ok(mount_infos)
 }
 
-/// Get every mount by reading the `/proc/self/mountinfo` file. Unlike [`crate::volume::get_mounts`], this includes the file systems that are not backed by a block device, e.g. `tmpfs`, `nfs`, `overlay` and `zfs`.
+/// Get every mount by reading the `/proc/self/mountinfo` file. Unlike the mount points of [`crate::volume::Volume`], this includes the file systems that are not backed by a block device, e.g. `tmpfs`, `nfs`, `overlay` and `zfs`.
 ///
 /// ```rust
 /// use mprober_lib::volume;

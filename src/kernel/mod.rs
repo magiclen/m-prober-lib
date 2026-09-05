@@ -3,10 +3,7 @@ use std::io::{self, ErrorKind};
 use crate::{
     Error,
     scanner_rust::ScannerAscii,
-    utils::{
-        parse_number, read_file, read_single_record_file, read_sysfs_number, uname,
-        utsname_field_to_string,
-    },
+    utils::{read_single_record_file, read_sysfs_number, uname, utsname_field_to_string},
 };
 
 /// The system-wide file handle usage read from the `/proc/sys/fs/file-nr` file.
@@ -99,20 +96,6 @@ pub fn get_kernel_version() -> Result<String, Error> {
     Ok(utsname_field_to_string(&buffer.release))
 }
 
-/// Get the entropy available to the random number generator in bits, by reading the `/proc/sys/kernel/random/entropy_avail` file. Since Linux 5.6 the pool is considered full at `256`, and a system that stays far below that may block in `getrandom(2)` early after boot.
-///
-/// ```rust
-/// use mprober_lib::kernel;
-///
-/// let entropy = kernel::get_entropy_available().unwrap();
-///
-/// println!("{entropy}");
-/// ```
-#[inline]
-pub fn get_entropy_available() -> Result<u32, Error> {
-    read_sysfs_number("/proc/sys/kernel/random/entropy_avail")
-}
-
 /// Get the highest PID the kernel assigns before wrapping around, by reading the `/proc/sys/kernel/pid_max` file. It is also the number of processes the system can have at most.
 ///
 /// ```rust
@@ -139,38 +122,6 @@ pub fn get_pid_max() -> Result<u32, Error> {
 #[inline]
 pub fn get_threads_max() -> Result<u64, Error> {
     read_sysfs_number("/proc/sys/kernel/threads-max")
-}
-
-/// The system-wide inode usage read from the `/proc/sys/fs/inode-nr` file.
-#[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct InodeNr {
-    /// The number of allocated inodes.
-    pub allocated: u64,
-    /// The number of allocated inodes that are free.
-    pub free:      u64,
-}
-
-/// Get the system-wide inode usage by reading the `/proc/sys/fs/inode-nr` file. These are the inodes of the in-memory cache, not the ones of a file system, which [`crate::volume::Volume`] reports instead.
-///
-/// ```rust
-/// use mprober_lib::kernel;
-///
-/// let inode_nr = kernel::get_inode_nr().unwrap();
-///
-/// println!("{inode_nr:#?}");
-/// ```
-#[inline]
-pub fn get_inode_nr() -> Result<InodeNr, Error> {
-    let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/sys/fs/inode-nr")?;
-
-    let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let free = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-    Ok(InodeNr {
-        allocated,
-        free,
-    })
 }
 
 /// Get the parameters the bootloader passed to the kernel, by reading the `/proc/cmdline` file.
@@ -250,98 +201,9 @@ pub fn get_kernel_taint_reasons(tainted: u64) -> Vec<&'static str> {
         .collect()
 }
 
-/// One loaded kernel module, read from the `/proc/modules` file.
-#[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct KernelModule {
-    /// The name of the module, e.g. `nvme`.
-    pub name:       String,
-    /// The size of the module in memory in bytes.
-    pub size:       u64,
-    /// How many other modules and open handles depend on this one. A module with `0` can be unloaded.
-    pub used_by:    u64,
-    /// The names of the modules that depend on this one.
-    pub dependents: Vec<String>,
-    /// The state of the module, which is `Live`, `Loading` or `Unloading`.
-    pub state:      String,
-}
-
-/// Get the loaded kernel modules by reading the `/proc/modules` file, like the `lsmod` command.
-///
-/// ```rust
-/// use mprober_lib::kernel;
-///
-/// let modules = kernel::get_modules().unwrap();
-///
-/// println!("{modules:#?}");
-/// ```
-pub fn get_modules() -> Result<Vec<KernelModule>, Error> {
-    let data = read_file("/proc/modules", 32 * 1024)?;
-
-    parse_modules(&data)
-}
-
-/// Parse the content of `/proc/modules`, whose lines look like `nvme 61440 4 nvme_core,dep, Live 0x0000000000000000`.
-fn parse_modules(data: &[u8]) -> Result<Vec<KernelModule>, Error> {
-    let mut modules = Vec::with_capacity(64);
-
-    for line in data.split(|&b| b == b'\n') {
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
-
-        let (Some(name), Some(size), Some(used_by), Some(dependents), Some(state)) =
-            (fields.next(), fields.next(), fields.next(), fields.next(), fields.next())
-        else {
-            continue;
-        };
-
-        // A module nothing depends on has a single hyphen in place of the list.
-        let dependents = if dependents == b"-" {
-            Vec::new()
-        } else {
-            dependents
-                .split(|&b| b == b',')
-                .filter(|dependent| !dependent.is_empty())
-                .map(|dependent| String::from_utf8_lossy(dependent).into_owned())
-                .collect()
-        };
-
-        modules.push(KernelModule {
-            name: String::from_utf8_lossy(name).into_owned(),
-            size: parse_number(size)?,
-            used_by: parse_number(used_by)?,
-            dependents,
-            state: String::from_utf8_lossy(state).into_owned(),
-        });
-    }
-
-    Ok(modules)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_module_list() {
-        const MODULES: &[u8] = b"nvme 61440 4 nvme_core,dep, Live 0x0000000000000000
-nvme_core 200704 5 nvme Live 0x0000000000000000
-btrfs 2039808 2 - Live 0x0000000000000000
-";
-
-        let modules = parse_modules(MODULES).unwrap();
-
-        assert_eq!(3, modules.len());
-
-        assert_eq!("nvme", modules[0].name);
-        assert_eq!(61440, modules[0].size);
-        assert_eq!(4, modules[0].used_by);
-        assert_eq!(vec!["nvme_core", "dep"], modules[0].dependents);
-        assert_eq!("Live", modules[0].state);
-
-        // A module nothing depends on has a hyphen instead of a list.
-        assert_eq!("btrfs", modules[2].name);
-        assert!(modules[2].dependents.is_empty());
-    }
 
     #[test]
     fn taint_reasons() {

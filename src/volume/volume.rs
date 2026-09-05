@@ -11,7 +11,7 @@ use std::{
 use crate::{
     Error,
     scanner_rust::ScannerAscii,
-    volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, get_mounts},
+    volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, mounts::get_mounts},
 };
 
 /// One mounted block device. Two instances are equal when their device names are equal.
@@ -96,6 +96,8 @@ fn statvfs(point: &str) -> Option<FsUsage> {
 }
 
 /// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc. A mounted device whose mount point cannot be reached is skipped.
+///
+/// `statvfs` has no timeout, so this blocks for as long as the file system takes to answer. A network mount whose server is unreachable can therefore make this never return, which is not the same as the skipped case above.
 ///
 /// ```rust
 /// use mprober_lib::volume;

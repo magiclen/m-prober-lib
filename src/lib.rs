@@ -1,7 +1,7 @@
 /*!
 # M Prober Lib
 
-This crate aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, pressure, sensors, batteries, power caps, cgroup limits, network interfaces, sockets, routes, block devices, mounts and processes.
+This crate aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, pressure, sensors, batteries, cgroup limits, network interfaces, sockets, routes, block devices, mounts and processes.
 
 It reads the files provided by the kernel (`/proc` and `/sys`) or calls libc directly, so it has no extra runtime dependencies. Linux 5.10 or later is expected.
 
@@ -17,19 +17,15 @@ println!("{}", hostname::get_hostname().unwrap());
 println!("{:#?}", system::get_dmi_info().unwrap());
 println!("{}", system::get_machine_id().unwrap());
 println!("{}", system::get_boot_id().unwrap());
-println!("{:#?}", system::detect_virtualization().unwrap());
 
 // Kernel
 println!("{}", kernel::get_kernel_version().unwrap());
 println!("{:#?}", kernel::get_uname().unwrap());
 println!("{:#?}", kernel::get_file_nr().unwrap());
-println!("{:#?}", kernel::get_inode_nr().unwrap());
-println!("{}", kernel::get_entropy_available().unwrap());
 println!("{}", kernel::get_pid_max().unwrap());
 println!("{}", kernel::get_threads_max().unwrap());
 println!("{:?}", kernel::get_kernel_cmdline().unwrap());
 println!("{:?}", kernel::get_kernel_taint_reasons(kernel::get_kernel_taint().unwrap()));
-println!("{:#?}", kernel::get_modules().unwrap());
 
 // Time
 println!("{}", btime::get_btime());
@@ -47,8 +43,6 @@ println!("{:#?}", cpu::get_all_cpu_topologies().unwrap());
 println!("{:#?}", cpu::get_cpu_frequency(0).unwrap());
 println!("{:#?}", cpu::get_all_cpu_frequencies().unwrap());
 println!("{:#?}", cpu::get_cpu_thermal_throttle(0).unwrap());
-println!("{:#?}", cpu::get_interrupt_stats().unwrap());
-println!("{:#?}", cpu::get_softirq_stats().unwrap());
 
 // Memory
 println!("{:#?}", memory::free().unwrap());
@@ -61,7 +55,6 @@ println!("{:#?}", memory::get_numa_nodes().unwrap());
 println!("{:#?}", pressure::get_cpu_pressure().unwrap());
 println!("{:#?}", hwmon::get_hwmon_devices().unwrap());
 println!("{:#?}", power_supply::get_power_supplies().unwrap());
-println!("{:#?}", power_supply::get_power_cap_zones().unwrap());
 
 // cgroup
 let cgroup_path = cgroup::get_cgroup_path().unwrap();
@@ -77,7 +70,6 @@ println!("{:#?}", cgroup::get_cgroup_pressure(&cgroup_path, "cpu").unwrap());
 println!("{:#?}", volume::get_volumes().unwrap());
 println!("{:#?}", volume::get_disk_stats().unwrap());
 println!("{:#?}", volume::get_block_devices().unwrap());
-println!("{:#?}", volume::get_mounts().unwrap());
 println!("{:#?}", volume::get_mount_infos().unwrap());
 
 // Network
@@ -88,7 +80,6 @@ println!("{:#?}", network::get_socket_stat().unwrap());
 println!("{:#?}", network::get_protocol_stat().unwrap());
 println!("{:#?}", network::get_all_socket_connections().unwrap());
 println!("{:#?}", network::get_default_routes().unwrap());
-println!("{:#?}", network::get_wireless().unwrap());
 
 // Processes
 let pid = std::process::id();
@@ -97,11 +88,9 @@ println!("{:#?}", process::get_process_io(pid).unwrap());
 println!("{}", process::get_process_fd_count(pid).unwrap());
 println!("{:#?}", process::get_process_memory(pid).unwrap());
 println!("{:#?}", process::get_process_threads(pid).unwrap());
-println!("{:#?}", process::get_process_sched_stat(pid).unwrap());
 println!("{:#?}", process::get_process_oom(pid).unwrap());
 println!("{:#?}", process::get_process_limits(pid).unwrap());
 println!("{}", process::get_process_cwd(pid).unwrap().display());
-println!("{:#?}", process::get_process_environ(pid).unwrap());
 println!("{}", cgroup::get_process_cgroup_path(pid).unwrap().display());
 ```
 
@@ -131,13 +120,13 @@ mod utils;
 pub mod btime;
 /// The resource usage, limits and events of a cgroup (v2), e.g. the limits of the container the process runs in.
 pub mod cgroup;
-/// CPU models, topology, frequencies, per-CPU time counters, interrupt counters and system-wide scheduler counters.
+/// CPU models, topology, frequencies, per-CPU time counters and system-wide scheduler counters.
 pub mod cpu;
 /// The hostname of the system.
 pub mod hostname;
 /// Temperature, fan, voltage, power, current, energy and humidity sensors, like the `sensors` command.
 pub mod hwmon;
-/// The kernel version, the `uname` fields, the file handle usage, the boot parameters, the taint flags and the loaded modules.
+/// The kernel version, the `uname` fields, the file handle usage, the boot parameters and the taint flags.
 pub mod kernel;
 /// The load average.
 pub mod load_average;
@@ -145,7 +134,7 @@ pub mod load_average;
 pub mod memory;
 /// Network interfaces, their counters, their link information, their IP addresses, the protocol counters, the sockets and the routing table.
 pub mod network;
-/// Batteries, power adapters and the power capping (RAPL) zones.
+/// Batteries and power adapters.
 pub mod power_supply;
 /// PSI (Pressure Stall Information) for CPU, memory and I/O.
 pub mod pressure;
@@ -153,7 +142,7 @@ pub mod pressure;
 pub mod process;
 /// The datetime of the hardware real time clock.
 pub mod rtc_time;
-/// The identity of the machine, and whether it is virtualized.
+/// The identity of the machine as the firmware and the kernel report it.
 pub mod system;
 /// The time since the system booted.
 pub mod uptime;

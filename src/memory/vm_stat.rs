@@ -51,9 +51,9 @@ pub fn get_vm_stat() -> Result<VmStat, Error> {
             _ => continue,
         }
 
-        remaining -= 1;
+        // The file has more than a hundred lines, so stop as soon as everything is found. The count is saturating so that a repeated label cannot underflow it.
+        remaining = remaining.saturating_sub(1);
 
-        // The file has more than a hundred lines, so stop as soon as everything is found.
         if remaining == 0 {
             break;
         }

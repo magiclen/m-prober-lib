@@ -9,6 +9,5 @@ mod volume_stat;
 pub use block_device::*;
 pub use disk_stat::*;
 pub use mount_info::*;
-pub use mounts::*;
 pub use volume::*;
 pub use volume_stat::*;

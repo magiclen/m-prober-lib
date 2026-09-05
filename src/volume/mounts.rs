@@ -7,10 +7,9 @@ use std::{
 
 use crate::{Error, scanner_rust::ScannerAscii, utils::unescape_octal};
 
-/// The mount points of one block device, read from the `/proc/mounts` file.
+/// The mount points of one block device, read from the `/proc/mounts` file. [`crate::volume::MountInfo`] is the public superset of this, so this only feeds [`get_volumes`](crate::volume::get_volumes).
 #[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Mount {
+pub(crate) struct Mount {
     /// The file system type, e.g. `ext4` or `btrfs`.
     pub fs_type: String,
     /// Every path this device is mounted at, in the order of the `/proc/mounts` file.
@@ -72,15 +71,7 @@ fn resolve_device_name(device_path: &str) -> String {
 }
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
-///
-/// ```rust
-/// use mprober_lib::volume;
-///
-/// let mounts = volume::get_mounts().unwrap();
-///
-/// println!("{mounts:#?}");
-/// ```
-pub fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
+pub(crate) fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
     let entries = parse_mounts(File::open("/proc/mounts")?)?;
 
     let mut mounts: HashMap<String, Mount> = HashMap::with_capacity(entries.len());

@@ -1,8 +1,4 @@
-mod power_cap;
-
 use std::{fs, io::ErrorKind, path::Path};
-
-pub use power_cap::*;
 
 use crate::{
     Error,
