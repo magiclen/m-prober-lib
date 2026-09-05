@@ -1,7 +1,11 @@
 mod network_address;
 mod network_info;
 mod network_stat;
+mod protocol_stat;
+mod route;
+mod socket_connection;
 mod socket_stat;
+mod wireless;
 
 use std::{
     collections::HashSet,
@@ -14,12 +18,17 @@ use std::{
 pub use network_address::*;
 pub use network_info::*;
 pub use network_stat::*;
+pub use protocol_stat::*;
+pub use route::*;
+pub use socket_connection::*;
 pub use socket_stat::*;
+pub use wireless::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
 /// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Network {
     /// The name of the interface, e.g. `lo` or `eth0`.
     pub interface: String,
