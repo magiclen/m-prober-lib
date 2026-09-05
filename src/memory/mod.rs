@@ -22,7 +22,7 @@ pub struct Mem {
     pub shared:    u64,
     /// `Buffers` in bytes.
     pub buffers:   u64,
-    /// `Cached + KReclaimable` in bytes, the page cache plus the reclaimable kernel memory.
+    /// `Cached + SReclaimable` in bytes, the page cache plus the reclaimable slab memory, the same as the `free` command in procps-ng.
     pub cache:     u64,
     /// `MemAvailable` in bytes.
     pub available: u64,
@@ -33,7 +33,7 @@ pub struct Mem {
 pub struct Swap {
     /// `SwapTotal` in bytes.
     pub total: u64,
-    /// `SwapTotal - SwapFree - SwapCached` in bytes.
+    /// `SwapTotal - SwapFree` in bytes, the same as the `free` command in procps-ng. The pages in the swap cache are counted as used.
     pub used:  u64,
     /// `SwapFree` in bytes.
     pub free:  u64,
@@ -59,7 +59,7 @@ const SWAP_CACHED: usize = 5;
 const SWAP_TOTAL: usize = 6;
 const SWAP_FREE: usize = 7;
 const SHMEM: usize = 8;
-const K_RECLAIMABLE: usize = 9;
+const S_RECLAIMABLE: usize = 9;
 
 // The labels include the colon so that, for example, `Shmem:` cannot be matched by `ShmemHugePages:`.
 const USEFUL_ITEMS: [&[u8]; 10] = [
@@ -72,7 +72,7 @@ const USEFUL_ITEMS: [&[u8]; 10] = [
     b"SwapTotal:",
     b"SwapFree:",
     b"Shmem:",
-    b"KReclaimable:",
+    b"SReclaimable:",
 ];
 
 fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
@@ -110,11 +110,11 @@ fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
     let swap_total = item_values[SWAP_TOTAL].unwrap_or(0);
     let swap_free = item_values[SWAP_FREE].unwrap_or(0);
     let shmem = item_values[SHMEM].unwrap_or(0);
-    let k_reclaimable = item_values[K_RECLAIMABLE].unwrap_or(0);
+    let s_reclaimable = item_values[S_RECLAIMABLE].unwrap_or(0);
 
     // `MemAvailable` exists since Linux 3.14, so this estimate is only a fallback for a trimmed file.
     let available =
-        item_values[MEM_AVAILABLE].unwrap_or_else(|| free + buffers + cached + k_reclaimable);
+        item_values[MEM_AVAILABLE].unwrap_or_else(|| free + buffers + cached + s_reclaimable);
 
     let mem = Mem {
         total,
@@ -122,13 +122,13 @@ fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
         free,
         shared: shmem,
         buffers,
-        cache: cached + k_reclaimable,
+        cache: cached + s_reclaimable,
         available,
     };
 
     let swap = Swap {
         total: swap_total,
-        used:  swap_total.saturating_sub(swap_free).saturating_sub(swap_cached),
+        used:  swap_total.saturating_sub(swap_free),
         free:  swap_free,
         cache: swap_cached,
     };
@@ -200,7 +200,7 @@ SUnreclaim:       371432 kB
 
     #[test]
     fn parse_trimmed() {
-        // A container may provide a file without `KReclaimable` and with the items in another order.
+        // A container may provide a file without `SReclaimable` and with the items in another order.
         const TRIMMED: &[u8] = b"MemFree:         1000 kB
 MemTotal:        4000 kB
 Cached:           500 kB
