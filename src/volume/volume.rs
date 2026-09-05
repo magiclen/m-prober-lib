@@ -70,13 +70,15 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                 sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
 
-            let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            // The sector fields in `/proc/diskstats` always use 512-byte sectors, regardless of the device's sector size.
+            let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
 
             for _ in 0..3 {
                 sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
 
-            let write_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let write_bytes =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
 
             for _ in 0..2 {
                 sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
