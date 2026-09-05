@@ -31,6 +31,7 @@ cargo bench
 pub extern crate scanner_rust;
 
 mod functions;
+mod utils;
 
 pub mod btime;
 pub mod cpu;

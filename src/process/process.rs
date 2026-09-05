@@ -19,6 +19,7 @@ use crate::{
         get_process_status, get_process_time_stat,
     },
     scanner_rust::ScannerError,
+    utils::clock_ticks_to_duration,
 };
 
 #[derive(Debug, Clone, Eq)]
@@ -156,8 +157,8 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let rss_shared = stat.shared;
     let rss_anon = stat.rss_anon;
 
-    let start_time =
-        get_btime() + chrono::Duration::from_std(Duration::from_millis(stat.starttime)).unwrap();
+    // `starttime` is in clock ticks since boot, not in milliseconds.
+    let start_time = get_btime() + clock_ticks_to_duration(stat.starttime);
 
     let process = Process {
         pid,
