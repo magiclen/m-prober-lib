@@ -40,6 +40,7 @@ pub mod kernel;
 pub mod load_average;
 pub mod memory;
 pub mod network;
+pub mod pressure;
 pub mod process;
 pub mod rtc_time;
 pub mod uptime;
