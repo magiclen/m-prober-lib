@@ -40,6 +40,15 @@ pub(crate) fn utsname_field_to_string(field: &[libc::c_char]) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
+/// Get the page size in bytes.
+#[inline]
+pub(crate) fn page_size() -> usize {
+    // libc caches this value from the auxiliary vector, so calling it repeatedly costs no syscall.
+    let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+
+    if size > 0 { size as usize } else { 4096 }
+}
+
 /// Get the number of clock ticks per second (`USER_HZ`), which is the unit of the time fields in `/proc`.
 #[inline]
 pub(crate) fn clock_ticks_per_second() -> u64 {

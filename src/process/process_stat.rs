@@ -4,12 +4,10 @@ use std::{
     str::from_utf8,
 };
 
-use page_size::get as get_page_size;
-
 use crate::{
     process::ProcessState,
     scanner_rust::{Scanner, ScannerError, ScannerU8SliceAscii},
-    utils::read_file,
+    utils::{page_size, read_file},
 };
 
 #[derive(Default, Debug, Clone)]
@@ -155,9 +153,10 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
 
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    stat.rss = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
-    stat.shared =
-        sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
+    let page_size = page_size();
+
+    stat.rss = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
+    stat.shared = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
 
     stat.rss_anon = stat.rss.saturating_sub(stat.shared);
 
