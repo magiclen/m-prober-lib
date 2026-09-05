@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
     io::ErrorKind,
     mem::take,
-    path::Path,
+    path::{Path, PathBuf},
     thread::sleep,
     time::Duration,
 };
@@ -31,6 +31,8 @@ pub struct Process {
     pub ppid:               u32,
     pub program:            String,
     pub cmdline:            String,
+    /// The path of the executable. It is `None` for kernel threads or when the permission is denied.
+    pub exe:                Option<PathBuf>,
     pub tty:                Option<String>,
     pub priority:           i8,
     pub real_time_priority: Option<u8>,
@@ -157,6 +159,8 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         }
     }
 
+    let exe = fs::read_link(process_path.join("exe")).ok();
+
     let priority = stat.priority;
     let real_time_priority = if stat.rt_priority > 0 { Some(stat.rt_priority) } else { None };
     let nice = stat.nice;
@@ -177,6 +181,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         ppid,
         program,
         cmdline,
+        exe,
         tty,
         priority,
         real_time_priority,
