@@ -12,7 +12,7 @@ pub struct VolumeSpeed {
     pub read_iops:            f64,
     /// Write operations completed per second.
     pub write_iops:           f64,
-    /// The fraction of time the device was busy doing I/O, like the `%util` column of `iostat`. If it is `1.0`, means `100%`.
+    /// The fraction of time the device was busy doing I/O, like the `%util` column of `iostat`. If it is `1.0`, means `100%`. Since Linux 5.0 the kernel counts the busy time per jiffy, so this is an approximation, and a device that serves requests in parallel (NVMe, a virtio disk with several queues, RAID) reaches `1.0` as soon as some request is always in flight, long before it is saturated. Use `average_queue_length` and the IOPS to judge saturation.
     pub utilization:          f64,
     /// The average number of requests in flight, like the `aqu-sz` column of `iostat`.
     pub average_queue_length: f64,
@@ -36,7 +36,7 @@ pub struct VolumeStat {
     pub write_time:         Duration,
     /// I/O operations currently in progress.
     pub io_in_progress:     u64,
-    /// Time spent doing I/O.
+    /// Time spent doing I/O. It grows while at least one request is in flight, so parallel requests do not add up, and since Linux 5.0 the kernel counts it per jiffy, so it is an approximation.
     pub io_time:            Duration,
     /// The sum of the time every request spent in flight, so it grows faster when more requests are queued.
     pub weighted_io_time:   Duration,

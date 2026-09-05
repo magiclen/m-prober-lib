@@ -130,7 +130,19 @@ pub fn get_dmi_info() -> Result<DmiInfo, Error> {
     })
 }
 
-/// Get the machine ID, which is a stable identifier of this installation, by reading the `/etc/machine-id` file. The `/var/lib/dbus/machine-id` file is used as a fallback on a system that only has the D-Bus one. A `NotFound` error is returned when neither exists.
+/// Check whether the content of a machine ID file is a real ID, which is exactly 32 hexadecimal digits. systemd writes `uninitialized` into the file of an image whose ID is to be generated on first boot, and a container can have an empty file, so anything else means there is no ID.
+#[inline]
+fn is_machine_id(value: &str) -> bool {
+    value.len() == 32 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Read a machine ID file, treating a file without a real ID as absent.
+#[inline]
+fn read_machine_id<P: AsRef<Path>>(path: P) -> Option<String> {
+    read_sysfs_string(path).ok().filter(|value| is_machine_id(value))
+}
+
+/// Get the machine ID, which is a stable identifier of this installation, by reading the `/etc/machine-id` file. The `/var/lib/dbus/machine-id` file is used as a fallback on a system that only has the D-Bus one. A file that does not hold a 32-digit hexadecimal ID is treated as absent, e.g. the `uninitialized` placeholder systemd leaves in an image until its first boot, or the empty file of a container. A `NotFound` error is returned when neither file holds an ID.
 ///
 /// ```rust,no_run
 /// use mprober_lib::system;
@@ -140,11 +152,9 @@ pub fn get_dmi_info() -> Result<DmiInfo, Error> {
 /// println!("{machine_id}");
 /// ```
 pub fn get_machine_id() -> Result<String, Error> {
-    match read_sysfs_string("/etc/machine-id") {
-        Ok(machine_id) if !machine_id.is_empty() => Ok(machine_id),
-        // A system that predates systemd only has the D-Bus one, and a freshly imaged one can have an empty file.
-        _ => Ok(read_sysfs_string("/var/lib/dbus/machine-id")?),
-    }
+    read_machine_id("/etc/machine-id")
+        .or_else(|| read_machine_id("/var/lib/dbus/machine-id"))
+        .ok_or_else(|| io::Error::from(ErrorKind::NotFound).into())
 }
 
 /// Get the boot ID, which is a random identifier the kernel generates on every boot, by reading the `/proc/sys/kernel/random/boot_id` file. It changes on every reboot, so it tells whether two samples came from the same boot.
@@ -181,5 +191,16 @@ mod tests {
 
         assert_eq!(None, unknown.chassis_type_name());
         assert_eq!(None, DmiInfo::default().chassis_type_name());
+    }
+
+    #[test]
+    fn machine_id_format() {
+        assert!(is_machine_id("84c050f9ba764f1485538aeeaacb6142"));
+
+        // systemd leaves this placeholder in an image until its first boot.
+        assert!(!is_machine_id("uninitialized"));
+        assert!(!is_machine_id(""));
+        assert!(!is_machine_id("84c050f9ba764f1485538aeeaacb614"));
+        assert!(!is_machine_id("84c050f9ba764f1485538aeeaacb614g"));
     }
 }

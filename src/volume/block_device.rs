@@ -43,7 +43,7 @@ pub struct BlockDeviceInfo {
     pub discard_max_bytes:   Option<u64>,
     /// The model name of the disk, e.g. `Samsung SSD 980 PRO 1TB`. It is `None` for virtual devices like `loop0` or `dm-0`.
     pub model:               Option<String>,
-    /// The serial number of the disk. It is `None` when the driver does not report one.
+    /// The serial number of the disk, which NVMe reports under `device/serial` and virtio-blk under `serial`. It is `None` when the driver does not report one as text, which is the case for SCSI (and therefore SATA) disks.
     pub serial:              Option<String>,
     /// The disk this partition belongs to. It is `None` when the device is a whole disk.
     pub partition:           Option<PartitionInfo>,
@@ -63,6 +63,16 @@ fn read_active_choice<P: AsRef<Path>>(path: P) -> Option<String> {
     let value = read_sysfs_string(path).ok()?;
 
     parse_active_choice(&value).map(|choice| choice.to_owned())
+}
+
+/// Read a sysfs attribute that the driver may pad with spaces, e.g. a SCSI model name. An attribute that is empty after trimming is `None`.
+#[inline]
+fn read_padded_string<P: AsRef<Path>>(path: P) -> Option<String> {
+    let value = read_sysfs_string(path).ok()?;
+
+    let value = value.trim();
+
+    (!value.is_empty()).then(|| value.to_owned())
 }
 
 /// Get the attributes of a block device (a disk or a partition) by reading files in the `/sys/class/block/DEVICE` folder. For a partition, the attributes that only a whole disk has come from its parent disk.
@@ -130,17 +140,11 @@ pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo
 
     let discard_max_bytes = read_sysfs_number(disk_path.join("queue/discard_max_bytes")).ok();
 
-    // SCSI and NVMe pad the model name with spaces.
-    let model = read_sysfs_string(disk_path.join("device/model"))
-        .ok()
-        .map(|model| model.trim().to_owned())
-        .filter(|model| !model.is_empty());
+    let model = read_padded_string(disk_path.join("device/model"));
 
-    // NVMe reports the serial number under `device`, while SCSI reports it under `device/vpd_pg80`, which is not text.
-    let serial = read_sysfs_string(disk_path.join("device/serial"))
-        .ok()
-        .map(|serial| serial.trim().to_owned())
-        .filter(|serial| !serial.is_empty());
+    // NVMe reports the serial number under `device`, while virtio-blk reports it in the disk folder itself, and SCSI only has the binary `device/vpd_pg80`, which is not text.
+    let serial = read_padded_string(disk_path.join("device/serial"))
+        .or_else(|| read_padded_string(disk_path.join("serial")));
 
     Ok(BlockDeviceInfo {
         rotational,

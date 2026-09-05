@@ -17,9 +17,9 @@ use crate::{
 pub struct CPU {
     /// The `physical id` of this package. It is `0` on platforms that do not report one.
     pub physical_id: usize,
-    /// The model name, which is empty on platforms that do not report it (e.g. ARM).
-    pub model_name:  String,
-    /// The current frequency of each logical processor in MHz.
+    /// The model name, e.g. `Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz`. It is `None` on a platform whose `/proc/cpuinfo` file has no `model name` line (e.g. ARM, which only reports the implementer and the part number).
+    pub model_name:  Option<String>,
+    /// The current frequency of each logical processor in MHz. It is empty when neither the `/proc/cpuinfo` file nor cpufreq reports a frequency, e.g. in a virtual machine on ARM.
     pub cpus_mhz:    Vec<f64>,
     /// The number of logical processors in this package.
     pub siblings:    usize,
@@ -55,7 +55,7 @@ struct ProcessorBlock<'a> {
 
 #[derive(Default)]
 struct CPUBuilder {
-    model_name: String,
+    model_name: Option<String>,
     cpus_mhz:   Vec<f64>,
     processors: Vec<usize>,
     core_ids:   BTreeSet<usize>,
@@ -71,10 +71,10 @@ fn flush_processor_block(block: ProcessorBlock, builders: &mut BTreeMap<usize, C
     // Platforms without `physical id` are treated as a single package.
     let builder = builders.entry(block.physical_id.unwrap_or(0)).or_default();
 
-    if builder.model_name.is_empty()
+    if builder.model_name.is_none()
         && let Some(model_name) = block.model_name
     {
-        builder.model_name = String::from_utf8_lossy(model_name).into_owned();
+        builder.model_name = Some(String::from_utf8_lossy(model_name).into_owned());
     }
 
     if let Some(mhz) = block.mhz {
@@ -333,7 +333,7 @@ Model\t\t: Raspberry Pi 4 Model B Rev 1.4
         let (cpu, processors) = &cpus[0];
 
         assert_eq!(0, cpu.physical_id);
-        assert_eq!("Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz", cpu.model_name);
+        assert_eq!(Some("Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz"), cpu.model_name.as_deref());
         assert_eq!(vec![2400.0, 2500.0], cpu.cpus_mhz);
         assert_eq!(2, cpu.siblings);
         assert_eq!(1, cpu.cpu_cores);
@@ -361,7 +361,7 @@ Model\t\t: Raspberry Pi 4 Model B Rev 1.4
         let (cpu, processors) = &cpus[0];
 
         assert_eq!(0, cpu.physical_id);
-        assert_eq!("", cpu.model_name);
+        assert_eq!(None, cpu.model_name);
         assert!(cpu.cpus_mhz.is_empty());
         assert_eq!(2, cpu.siblings);
         assert_eq!(2, cpu.cpu_cores);
