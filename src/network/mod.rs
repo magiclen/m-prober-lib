@@ -62,7 +62,8 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
             break;
         };
 
-        let interface = unsafe { String::from_utf8_unchecked(interface) };
+        // The kernel only rejects `/`, `:` and whitespace in an interface name, so it may not be valid UTF-8.
+        let interface = String::from_utf8_lossy(&interface).into_owned();
 
         let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         let receive_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

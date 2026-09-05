@@ -38,8 +38,8 @@ pub struct ProcessStat {
     pub vsize:        usize,
     /// resident, VmRSS (resident set size)
     pub rss:          usize,
-    /// The soft limit on the RSS.
-    pub rsslim:       usize,
+    /// The soft limit on the RSS in bytes. It is `u64::MAX` when the limit is unlimited.
+    pub rsslim:       u64,
     /// The CPU number last executed on.
     pub processor:    usize,
     pub rt_priority:  u8,
@@ -143,7 +143,8 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
     // the `rss` field is read from the `statm` file later, in order to keep it consistent with the `shared` field
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    stat.rsslim = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    // This is `RLIM_INFINITY` for most processes, which does not fit into a 32-bit `usize`.
+    stat.rsslim = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     for _ in 0..13 {
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -212,7 +213,7 @@ pub(crate) mod tests {
         assert_eq!(1, stat.num_threads);
         assert_eq!(16, stat.starttime);
         assert_eq!(23744512, stat.vsize);
-        assert_eq!(usize::MAX, stat.rsslim);
+        assert_eq!(u64::MAX, stat.rsslim);
         assert_eq!(2, stat.processor);
         assert_eq!(0, stat.rt_priority);
     }

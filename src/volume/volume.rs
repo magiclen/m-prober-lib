@@ -63,11 +63,10 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
 
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        let device = unsafe {
-            String::from_utf8_unchecked(
-                sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            )
-        };
+        let device = String::from_utf8_lossy(
+            &sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+        )
+        .into_owned();
 
         if let Some(points) = mounts.remove(&device) {
             let reads_completed =

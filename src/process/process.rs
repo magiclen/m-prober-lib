@@ -32,6 +32,7 @@ pub struct Process {
     pub program:            String,
     pub cmdline:            String,
     /// The path of the executable. It is `None` for kernel threads or when the permission is denied.
+    /// The kernel appends ` (deleted)` to the path when the executable file has been removed or replaced.
     pub exe:                Option<PathBuf>,
     pub tty:                Option<String>,
     pub priority:           i8,

@@ -18,7 +18,7 @@ pub fn format_duration(duration: Duration) -> String {
     let minutes = sec / 60;
     let seconds = sec % 60;
 
-    let mut s = String::with_capacity(48);
+    let mut s = String::with_capacity(64);
 
     if days > 0 {
         write!(s, "{days} day").unwrap();
