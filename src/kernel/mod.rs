@@ -1,7 +1,43 @@
+use std::io::{self, ErrorKind};
+
 use crate::{
-    scanner_rust::ScannerError,
+    scanner_rust::{ScannerAscii, ScannerError},
     utils::{uname, utsname_field_to_string},
 };
+
+#[derive(Default, Debug, Clone)]
+pub struct FileNr {
+    /// The number of allocated file handles.
+    pub allocated: u64,
+    /// The number of allocated but unused file handles (always `0` since Linux 2.6).
+    pub unused:    u64,
+    /// The maximum number of file handles.
+    pub max:       u64,
+}
+
+/// Get the system-wide file handle usage by reading the `/proc/sys/fs/file-nr` file.
+///
+/// ```rust
+/// use mprober_lib::kernel;
+///
+/// let file_nr = kernel::get_file_nr().unwrap();
+///
+/// println!("{file_nr:#?}");
+/// ```
+#[inline]
+pub fn get_file_nr() -> Result<FileNr, ScannerError> {
+    let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/sys/fs/file-nr")?;
+
+    let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let unused = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let max = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    Ok(FileNr {
+        allocated,
+        unused,
+        max,
+    })
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct Uname {
