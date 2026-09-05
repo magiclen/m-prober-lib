@@ -50,7 +50,16 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 
     let mut networks = Vec::with_capacity(1);
 
-    while let Some(interface) = sc.next_until_raw(":")? {
+    loop {
+        // Interface names are right-aligned in this file, so the padding must be skipped before reading up to the colon.
+        if !sc.skip_whitespaces()? {
+            break;
+        }
+
+        let Some(interface) = sc.next_until_raw(":")? else {
+            break;
+        };
+
         let interface = unsafe { String::from_utf8_unchecked(interface) };
 
         let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
