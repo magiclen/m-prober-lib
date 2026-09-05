@@ -59,6 +59,8 @@ pub struct Process {
     pub rss_shared:         usize,
     /// Resident Anonymous Memory
     pub rss_anon:           usize,
+    /// The swapped-out memory size in bytes (`VmSwap`).
+    pub swap:               usize,
     /// The time this process started, computed from the boot time.
     pub start_time:         DateTime<Utc>,
 }
@@ -201,6 +203,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let rss = stat.rss;
     let rss_shared = stat.shared;
     let rss_anon = stat.rss_anon;
+    let swap = status.vm_swap;
 
     // `starttime` is in clock ticks since boot, not in milliseconds.
     let start_time = btime + clock_ticks_to_duration(stat.starttime);
@@ -223,6 +226,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         rss,
         rss_shared,
         rss_anon,
+        swap,
         start_time,
     };
 

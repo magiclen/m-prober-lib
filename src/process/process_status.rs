@@ -3,27 +3,85 @@ use std::{
     path::Path,
 };
 
-use crate::{Error, scanner_rust::ScannerAscii};
+use crate::{Error, scanner_rust::ScannerU8SliceAscii, utils::read_single_record_file};
 
-/// The user and group IDs of a process, read from the `/proc/PID/status` file.
+/// Fields read from the `/proc/PID/status` file. Memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStatus {
-    /// The user who created this process or the UID set via `setuid()` by the root caller.
-    pub real_uid:      u32,
-    /// The group who created this process or the GID set via `setgid()` by the root caller.
-    pub real_gid:      u32,
-    /// The UID set via `setuid()` by the caller.
-    pub effective_uid: u32,
-    /// The GID set via `setgid()` by the caller.
-    pub effective_gid: u32,
-    /// The UID set via `setuid()` by the root caller
-    pub saved_set_uid: u32,
-    /// The GID set via `setgid()` by the root caller
-    pub saved_set_gid: u32,
-    /// The UID of the running executable file of this process.
-    pub fs_uid:        u32,
-    /// The GID of the running executable file of this process.
-    pub fs_gid:        u32,
+    /// The real UID, which is the UID of the user who started the process.
+    pub real_uid:                   u32,
+    /// The real GID.
+    pub real_gid:                   u32,
+    /// The effective UID, which is used for most permission checks.
+    pub effective_uid:              u32,
+    /// The effective GID.
+    pub effective_gid:              u32,
+    /// The saved set-user-ID, which a set-user-ID program uses to switch its effective UID back and forth.
+    pub saved_set_uid:              u32,
+    /// The saved set-group-ID.
+    pub saved_set_gid:              u32,
+    /// The filesystem UID, which is used for permission checks on file system access. It is normally the same as the effective UID.
+    pub fs_uid:                     u32,
+    /// The filesystem GID.
+    pub fs_gid:                     u32,
+    /// The peak resident set size (`VmHWM`) in bytes.
+    pub vm_hwm:                     usize,
+    /// The swapped-out memory size (`VmSwap`) in bytes. Swapped-out shmem is not included.
+    pub vm_swap:                    usize,
+    /// The number of voluntary context switches.
+    pub voluntary_ctxt_switches:    u64,
+    /// The number of involuntary context switches.
+    pub nonvoluntary_ctxt_switches: u64,
+}
+
+fn parse_process_status(data: &[u8]) -> Result<ProcessStatus, Error> {
+    let mut status = ProcessStatus::default();
+
+    let mut sc = ScannerU8SliceAscii::new(data);
+
+    while let Some(label) = sc.next()? {
+        match label {
+            b"Uid:" => {
+                status.real_uid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.effective_uid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.saved_set_uid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.fs_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            },
+            b"Gid:" => {
+                status.real_gid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.effective_gid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.saved_set_gid =
+                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.fs_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            },
+            b"VmHWM:" => {
+                status.vm_hwm =
+                    sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+            },
+            b"VmSwap:" => {
+                status.vm_swap =
+                    sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+            },
+            b"voluntary_ctxt_switches:" => {
+                status.voluntary_ctxt_switches =
+                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            },
+            b"nonvoluntary_ctxt_switches:" => {
+                status.nonvoluntary_ctxt_switches =
+                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            },
+            _ => (),
+        }
+
+        sc.drop_next_line()?;
+    }
+
+    Ok(status)
 }
 
 /// Get the status of a specific process found by ID by reading the `/proc/PID/status` file.
@@ -36,45 +94,53 @@ pub struct ProcessStatus {
 /// println!("{process_status:#?}");
 /// ```
 pub fn get_process_status(pid: u32) -> Result<ProcessStatus, Error> {
-    let mut status = ProcessStatus::default();
-
     let status_path = Path::new("/proc").join(pid.to_string()).join("status");
 
-    let mut sc: ScannerAscii<_, 192> = ScannerAscii::scan_path2(status_path)?;
+    // The kernel generates the whole file at once and it is about 1.5 KB, so one read normally gets everything.
+    let data = read_single_record_file(status_path, 2048)?;
 
-    loop {
-        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    parse_process_status(&data)
+}
 
-        if label.starts_with(b"Uid") {
-            status.real_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.effective_uid =
-                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.saved_set_uid =
-                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.fs_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            break;
-        } else {
-            sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        }
+    const STATUS: &[u8] = b"Name:\tWeb Content
+Umask:\t0002
+State:\tS (sleeping)
+Tgid:\t1234
+Pid:\t1234
+PPid:\t1
+Uid:\t1000\t1001\t1002\t1003
+Gid:\t2000\t2001\t2002\t2003
+FDSize:\t64
+Groups:\t4 24 27
+VmPeak:\t    8752 kB
+VmSize:\t    8752 kB
+VmHWM:\t    1956 kB
+VmRSS:\t    1956 kB
+VmSwap:\t     128 kB
+Threads:\t1
+voluntary_ctxt_switches:\t12
+nonvoluntary_ctxt_switches:\t3
+";
+
+    #[test]
+    fn parse_status() {
+        let status = parse_process_status(STATUS).unwrap();
+
+        assert_eq!(1000, status.real_uid);
+        assert_eq!(1001, status.effective_uid);
+        assert_eq!(1002, status.saved_set_uid);
+        assert_eq!(1003, status.fs_uid);
+        assert_eq!(2000, status.real_gid);
+        assert_eq!(2001, status.effective_gid);
+        assert_eq!(2002, status.saved_set_gid);
+        assert_eq!(2003, status.fs_gid);
+        assert_eq!(1956 * 1024, status.vm_hwm);
+        assert_eq!(128 * 1024, status.vm_swap);
+        assert_eq!(12, status.voluntary_ctxt_switches);
+        assert_eq!(3, status.nonvoluntary_ctxt_switches);
     }
-
-    loop {
-        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-        if label.starts_with(b"Gid") {
-            status.real_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.effective_gid =
-                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.saved_set_gid =
-                sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-            status.fs_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-            break;
-        } else {
-            sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        }
-    }
-
-    Ok(status)
 }
