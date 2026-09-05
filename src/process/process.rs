@@ -323,7 +323,7 @@ pub fn get_processes_with_cpu_utilization_in_percentage(
     interval: Duration,
 ) -> Result<Vec<(Process, f64)>, ScannerError> {
     let pre_average_cpu_stat = get_average_cpu_stat()?;
-    let processes_with_stat = get_processes_with_stat(process_filter).unwrap();
+    let processes_with_stat = get_processes_with_stat(process_filter)?;
 
     let mut processes_with_cpu_percentage = Vec::with_capacity(processes_with_stat.len());
 

@@ -31,8 +31,10 @@ pub fn get_rtc_date_time() -> Result<NaiveDateTime, ScannerError> {
     let month = sc.next_u32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let date = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    Ok(NaiveDateTime::new(
-        NaiveDate::from_ymd_opt(year, month, date).unwrap(),
-        NaiveTime::from_hms_opt(hour, minute, second).unwrap(),
-    ))
+    let date = NaiveDate::from_ymd_opt(year, month, date)
+        .ok_or(io::Error::from(ErrorKind::InvalidData))?;
+    let time = NaiveTime::from_hms_opt(hour, minute, second)
+        .ok_or(io::Error::from(ErrorKind::InvalidData))?;
+
+    Ok(NaiveDateTime::new(date, time))
 }
