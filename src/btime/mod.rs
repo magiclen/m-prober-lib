@@ -1,10 +1,24 @@
-use std::sync::Once;
+use std::{
+    mem::zeroed,
+    sync::OnceLock,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use chrono::prelude::*;
 
-use crate::uptime::get_uptime;
+#[inline]
+fn clock_gettime(clock_id: libc::clockid_t) -> Duration {
+    let mut ts: libc::timespec = unsafe { zeroed() };
 
-/// Get the btime (boot time) by subtract the current uptime from the current unix epoch timestamp.
+    // `CLOCK_REALTIME` and `CLOCK_BOOTTIME` always exist on Linux, so this call cannot fail.
+    unsafe {
+        libc::clock_gettime(clock_id, &mut ts);
+    }
+
+    Duration::new(ts.tv_sec.max(0) as u64, ts.tv_nsec as u32)
+}
+
+/// Get the btime (boot time) by subtracting `CLOCK_BOOTTIME` from `CLOCK_REALTIME` using the `clock_gettime` function in libc. The result is cached after the first call.
 ///
 /// ```rust
 /// use mprober_lib::btime;
@@ -15,12 +29,12 @@ use crate::uptime::get_uptime;
 /// ```
 #[inline]
 pub fn get_btime() -> DateTime<Utc> {
-    static START: Once = Once::new();
-    static mut BTIME: Option<DateTime<Utc>> = None;
+    static BTIME: OnceLock<DateTime<Utc>> = OnceLock::new();
 
-    unsafe {
-        START.call_once(|| BTIME = Some(get_uptime().unwrap().get_btime()));
+    *BTIME.get_or_init(|| {
+        let realtime = clock_gettime(libc::CLOCK_REALTIME);
+        let boottime = clock_gettime(libc::CLOCK_BOOTTIME);
 
-        BTIME.unwrap()
-    }
+        (UNIX_EPOCH + realtime.saturating_sub(boottime)).into()
+    })
 }
