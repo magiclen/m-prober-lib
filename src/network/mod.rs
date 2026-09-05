@@ -1,5 +1,7 @@
+mod network_address;
 mod network_info;
 mod network_stat;
+mod socket_stat;
 
 use std::{
     collections::HashSet,
@@ -9,8 +11,10 @@ use std::{
     time::Duration,
 };
 
+pub use network_address::*;
 pub use network_info::*;
 pub use network_stat::*;
+pub use socket_stat::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
