@@ -8,6 +8,7 @@ use crate::{Error, scanner_rust::ScannerAscii};
 
 /// One line of a PSI (Pressure Stall Information) file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PressureStat {
     /// The percentage of time stalled, averaged over the last 10 seconds. `100.0` means `100%`.
     pub avg10:  f64,
@@ -21,6 +22,7 @@ pub struct PressureStat {
 
 /// The PSI (Pressure Stall Information) of one resource.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pressure {
     /// The time in which at least one task was stalled on the resource.
     pub some: PressureStat,
@@ -52,7 +54,7 @@ fn read_pressure_stat<R: Read, const N: usize>(
     })
 }
 
-fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
+pub(crate) fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
     let mut sc: ScannerAscii<R, 256> = ScannerAscii::new2(reader);
 
     let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
