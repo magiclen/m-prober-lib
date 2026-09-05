@@ -64,6 +64,10 @@ impl ProcessIO {
     ) -> ProcessIOSpeed {
         let seconds = interval.as_secs_f64();
 
+        if seconds <= 0.0 {
+            return ProcessIOSpeed::default();
+        }
+
         let d_read = process_io_after_this.read_bytes.saturating_sub(self.read_bytes);
         let d_write = process_io_after_this.write_bytes.saturating_sub(self.write_bytes);
 

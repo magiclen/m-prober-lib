@@ -5,7 +5,10 @@ use std::{
     path::Path,
 };
 
-use crate::scanner_rust::{Scanner, ScannerError};
+use crate::{
+    scanner_rust::{Scanner, ScannerError},
+    utils::unescape_octal,
+};
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
 ///
@@ -23,9 +26,9 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
 
     while let Some(device_path) = sc.next_raw()? {
         if device_path.starts_with(b"/dev/") {
-            let device_path = String::from_utf8_lossy(&device_path);
+            let device_path = String::from_utf8_lossy(&unescape_octal(&device_path)).into_owned();
 
-            let path = Path::new(device_path.as_ref());
+            let path = Path::new(&device_path);
 
             // Only symlinks like `/dev/mapper/*` or `/dev/disk/by-uuid/*` need to be resolved to the real device name, and checking that first is cheaper than always calling `realpath`.
             let is_symlink =
@@ -41,10 +44,12 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
 
             let device = real_device_name.unwrap_or_else(|| device_path[5..].to_string());
 
-            let point = String::from_utf8_lossy(
-                &sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-            )
-            .into_owned();
+            let point = {
+                let point = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+                // A mount point containing a space is written as `\040` in this file.
+                String::from_utf8_lossy(&unescape_octal(&point)).into_owned()
+            };
 
             mounts.entry(device).or_default().push(point);
         }

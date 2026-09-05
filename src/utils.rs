@@ -18,6 +18,41 @@ where
     Ok(s.parse::<T>()?)
 }
 
+/// Decode the octal escape sequences that the kernel writes in `/proc/mounts` and `/proc/self/mountinfo`, such as `\040` for a space.
+pub(crate) fn unescape_octal(data: &[u8]) -> Vec<u8> {
+    if !data.contains(&b'\\') {
+        return data.to_vec();
+    }
+
+    let mut result = Vec::with_capacity(data.len());
+
+    let mut i = 0;
+
+    while i < data.len() {
+        // An escape sequence is a backslash followed by exactly three octal digits.
+        if data[i] == b'\\'
+            && let Some(digits) = data.get((i + 1)..(i + 4))
+            && digits.iter().all(|b| (b'0'..=b'7').contains(b))
+        {
+            let value = digits.iter().fold(0u16, |acc, b| acc * 8 + u16::from(b - b'0'));
+
+            if value <= u16::from(u8::MAX) {
+                result.push(value as u8);
+
+                i += 4;
+
+                continue;
+            }
+        }
+
+        result.push(data[i]);
+
+        i += 1;
+    }
+
+    result
+}
+
 /// Read a small sysfs file and return its content without the trailing whitespace.
 #[inline]
 pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
@@ -120,4 +155,21 @@ pub(crate) fn clock_ticks_to_duration(ticks: u64) -> Duration {
     let nanos = (ticks % ticks_per_second) * 1_000_000_000 / ticks_per_second;
 
     Duration::new(seconds, nanos as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unescape_octal_sequences() {
+        assert_eq!(b"/mnt/my disk".to_vec(), unescape_octal(b"/mnt/my\\040disk"));
+        assert_eq!(b"/mnt/a\tb".to_vec(), unescape_octal(b"/mnt/a\\011b"));
+        assert_eq!(b"/mnt/a\\b".to_vec(), unescape_octal(b"/mnt/a\\134b"));
+        assert_eq!(b"/mnt/plain".to_vec(), unescape_octal(b"/mnt/plain"));
+
+        // An incomplete or non-octal sequence is kept as it is.
+        assert_eq!(b"/mnt/a\\09b".to_vec(), unescape_octal(b"/mnt/a\\09b"));
+        assert_eq!(b"/mnt/a\\04".to_vec(), unescape_octal(b"/mnt/a\\04"));
+    }
 }

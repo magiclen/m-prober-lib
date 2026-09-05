@@ -65,6 +65,10 @@ impl NetworkStat {
     ) -> NetworkSpeed {
         let seconds = interval.as_secs_f64();
 
+        if seconds <= 0.0 {
+            return NetworkSpeed::default();
+        }
+
         let d_receive = network_stat_after_this.receive_bytes.saturating_sub(self.receive_bytes);
         let d_transmit = network_stat_after_this.transmit_bytes.saturating_sub(self.transmit_bytes);
         let d_receive_packets =

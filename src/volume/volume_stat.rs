@@ -68,6 +68,10 @@ impl VolumeStat {
     ) -> VolumeSpeed {
         let seconds = interval.as_secs_f64();
 
+        if seconds <= 0.0 {
+            return VolumeSpeed::default();
+        }
+
         let d_read = volume_stat_after_this.read_bytes.saturating_sub(self.read_bytes);
         let d_write = volume_stat_after_this.write_bytes.saturating_sub(self.write_bytes);
         let d_reads = volume_stat_after_this.reads_completed.saturating_sub(self.reads_completed);

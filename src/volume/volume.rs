@@ -40,7 +40,34 @@ impl PartialEq for Volume {
     }
 }
 
-/// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc.
+/// Get the total, used and available sizes of the file system at `point` in bytes. It returns `None` when the mount point cannot be reached.
+fn statvfs(point: &str) -> Option<(u64, u64, u64)> {
+    let path = CString::new(point.as_bytes()).ok()?;
+
+    let mut stats: libc::statvfs = unsafe { zeroed() };
+
+    let rtn = unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
+
+    if rtn != 0 {
+        return None;
+    }
+
+    // POSIX defines the block counts in units of `f_frsize`, not `f_bsize`.
+    #[allow(clippy::unnecessary_cast)]
+    {
+        let fragment_size = stats.f_frsize as u64;
+        let blocks = stats.f_blocks as u64;
+        let available_blocks = stats.f_bavail as u64;
+
+        Some((
+            fragment_size * blocks,
+            fragment_size * blocks.saturating_sub(available_blocks),
+            fragment_size * available_blocks,
+        ))
+    }
+}
+
+/// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc. A mounted device whose mount point cannot be reached is skipped.
 ///
 /// ```rust
 /// use mprober_lib::volume;
@@ -101,30 +128,11 @@ pub fn get_volumes() -> Result<Vec<Volume>, ScannerError> {
                 sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
             );
 
-            let (size, used, available) = {
-                let path = CString::new(points[0].as_bytes()).unwrap();
+            // A mount point can be unreachable (a disconnected network device, a directory without the search permission), so a failure here only skips this volume.
+            let Some((size, used, available)) = statvfs(&points[0]) else {
+                sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-                let mut stats: libc::statvfs = unsafe { zeroed() };
-
-                let rtn = unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
-
-                if rtn != 0 {
-                    return Err(io::Error::last_os_error().into());
-                }
-
-                // POSIX defines the block counts in units of `f_frsize`, not `f_bsize`.
-                #[allow(clippy::unnecessary_cast)]
-                {
-                    let fragment_size = stats.f_frsize as u64;
-                    let blocks = stats.f_blocks as u64;
-                    let available_blocks = stats.f_bavail as u64;
-
-                    (
-                        fragment_size * blocks,
-                        fragment_size * blocks.saturating_sub(available_blocks),
-                        fragment_size * available_blocks,
-                    )
-                }
+                continue;
             };
 
             let stat = VolumeStat {

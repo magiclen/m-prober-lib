@@ -9,89 +9,110 @@ pub use vm_stat::*;
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
 
+/// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]
 pub struct Mem {
-    /// `MemTotal`
+    /// `MemTotal` in bytes.
     pub total:     u64,
-    /// `MemTotal - MemAvailable`, the same as the `used` column of the `free` command in procps-ng 4.x
+    /// `MemTotal - MemAvailable` in bytes, the same as the `used` column of the `free` command in procps-ng 4.x.
     pub used:      u64,
-    /// `MemFree`
+    /// `MemFree` in bytes.
     pub free:      u64,
-    /// `Shmem`
+    /// `Shmem` in bytes.
     pub shared:    u64,
-    /// `Buffers`
+    /// `Buffers` in bytes.
     pub buffers:   u64,
-    /// `Cached + KReclaimable`, the page cache plus the reclaimable kernel memory
+    /// `Cached + KReclaimable` in bytes, the page cache plus the reclaimable kernel memory.
     pub cache:     u64,
-    /// `MemAvailable`
+    /// `MemAvailable` in bytes.
     pub available: u64,
 }
 
+/// Swap information in bytes.
 #[derive(Default, Debug, Clone)]
 pub struct Swap {
-    /// `SwapTotal`
+    /// `SwapTotal` in bytes.
     pub total: u64,
-    /// `SwapTotal - SwapFree - SwapCached`
+    /// `SwapTotal - SwapFree - SwapCached` in bytes.
     pub used:  u64,
-    /// `SwapFree`
+    /// `SwapFree` in bytes.
     pub free:  u64,
-    /// `SwapCached`
+    /// `SwapCached` in bytes.
     pub cache: u64,
 }
 
+/// The memory and swap information that the `free` command shows.
 #[derive(Default, Debug, Clone)]
 pub struct Free {
     pub mem:  Mem,
     pub swap: Swap,
 }
 
-fn parse_meminfo<R: Read>(reader: R) -> Result<Free, ScannerError> {
-    // These items must be listed in the same order as they appear in the file.
-    const USEFUL_ITEMS: [&[u8]; 10] = [
-        b"MemTotal",
-        b"MemFree",
-        b"MemAvailable",
-        b"Buffers",
-        b"Cached",
-        b"SwapCached",
-        b"SwapTotal",
-        b"SwapFree",
-        b"Shmem",
-        b"KReclaimable",
-    ];
+const MEM_TOTAL: usize = 0;
+const MEM_FREE: usize = 1;
+const MEM_AVAILABLE: usize = 2;
+const BUFFERS: usize = 3;
+const CACHED: usize = 4;
+const SWAP_CACHED: usize = 5;
+const SWAP_TOTAL: usize = 6;
+const SWAP_FREE: usize = 7;
+const SHMEM: usize = 8;
+const K_RECLAIMABLE: usize = 9;
 
+// The labels include the colon so that, for example, `Shmem:` cannot be matched by `ShmemHugePages:`.
+const USEFUL_ITEMS: [&[u8]; 10] = [
+    b"MemTotal:",
+    b"MemFree:",
+    b"MemAvailable:",
+    b"Buffers:",
+    b"Cached:",
+    b"SwapCached:",
+    b"SwapTotal:",
+    b"SwapFree:",
+    b"Shmem:",
+    b"KReclaimable:",
+];
+
+fn parse_meminfo<R: Read>(reader: R) -> Result<Free, ScannerError> {
     let mut sc: ScannerAscii<R, 768> = ScannerAscii::new2(reader);
 
-    let mut item_values = [0u64; USEFUL_ITEMS.len()];
+    // The items are looked up by label instead of by position, so neither the order nor the presence of a line matters.
+    let mut item_values: [Option<u64>; USEFUL_ITEMS.len()] = [None; USEFUL_ITEMS.len()];
 
-    for (i, &item) in USEFUL_ITEMS.iter().enumerate() {
-        loop {
-            let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let mut remaining = USEFUL_ITEMS.len();
 
-            if label.starts_with(item) {
-                let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    while let Some(label) = sc.next_raw()? {
+        if let Some(i) = USEFUL_ITEMS.iter().position(|&item| label == item)
+            && item_values[i].is_none()
+        {
+            let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-                item_values[i] = value * 1024;
+            item_values[i] = Some(value * 1024);
 
-                sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            remaining -= 1;
 
+            if remaining == 0 {
                 break;
-            } else {
-                sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
             }
         }
+
+        sc.drop_next_line()?;
     }
 
-    let total = item_values[0];
-    let free = item_values[1];
-    let available = item_values[2];
-    let buffers = item_values[3];
-    let cached = item_values[4];
-    let swap_cached = item_values[5];
-    let swap_total = item_values[6];
-    let swap_free = item_values[7];
-    let shmem = item_values[8];
-    let k_reclaimable = item_values[9];
+    // Only the total is mandatory, because a container may provide a trimmed file.
+    let total = item_values[MEM_TOTAL].ok_or(io::Error::from(ErrorKind::InvalidData))?;
+    let free = item_values[MEM_FREE].unwrap_or(0);
+    let buffers = item_values[BUFFERS].unwrap_or(0);
+    let cached = item_values[CACHED].unwrap_or(0);
+    let swap_cached = item_values[SWAP_CACHED].unwrap_or(0);
+    let swap_total = item_values[SWAP_TOTAL].unwrap_or(0);
+    let swap_free = item_values[SWAP_FREE].unwrap_or(0);
+    let shmem = item_values[SHMEM].unwrap_or(0);
+    let k_reclaimable = item_values[K_RECLAIMABLE].unwrap_or(0);
+
+    // `MemAvailable` exists since Linux 3.14, so this estimate is only a fallback for a trimmed file.
+    let available =
+        item_values[MEM_AVAILABLE].unwrap_or_else(|| free + buffers + cached + k_reclaimable);
 
     let mem = Mem {
         total,
@@ -173,5 +194,24 @@ SUnreclaim:       371432 kB
         assert_eq!(0, free.swap.used);
         assert_eq!(8000508 * 1024, free.swap.free);
         assert_eq!(0, free.swap.cache);
+    }
+
+    #[test]
+    fn parse_trimmed() {
+        // A container may provide a file without `KReclaimable` and with the items in another order.
+        const TRIMMED: &[u8] = b"MemFree:         1000 kB
+MemTotal:        4000 kB
+Cached:           500 kB
+Buffers:          100 kB
+";
+
+        let free = parse_meminfo(TRIMMED).unwrap();
+
+        assert_eq!(4000 * 1024, free.mem.total);
+        assert_eq!(1000 * 1024, free.mem.free);
+        assert_eq!(500 * 1024, free.mem.cache);
+        assert_eq!(1600 * 1024, free.mem.available);
+        assert_eq!((4000 - 1600) * 1024, free.mem.used);
+        assert_eq!(0, free.swap.total);
     }
 }
