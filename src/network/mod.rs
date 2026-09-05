@@ -1,3 +1,4 @@
+mod network_info;
 mod network_stat;
 
 use std::{
@@ -8,6 +9,7 @@ use std::{
     time::Duration,
 };
 
+pub use network_info::*;
 pub use network_stat::*;
 
 use crate::scanner_rust::{ScannerAscii, ScannerError};
