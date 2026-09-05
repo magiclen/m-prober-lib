@@ -19,13 +19,13 @@ pub struct ProcessStat {
     pub ppid:         u32,
     pub pgrp:         u32,
     pub session:      u32,
-    pub tty_nr_major: u8,
+    pub tty_nr_major: u16,
     pub tty_nr_minor: u32,
     pub tpgid:        Option<u32>,
-    pub utime:        u32,
-    pub stime:        u32,
-    pub cutime:       u32,
-    pub cstime:       u32,
+    pub utime:        u64,
+    pub stime:        u64,
+    pub cutime:       u64,
+    pub cstime:       u64,
     pub priority:     i8,
     pub nice:         i8,
     pub num_threads:  usize,
@@ -90,7 +90,8 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
     {
         let tty_nr = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        stat.tty_nr_major = (tty_nr >> 8) as u8;
+        // This is how the kernel encodes `dev_t`: 12-bit major, 20-bit minor split into two parts.
+        stat.tty_nr_major = ((tty_nr >> 8) & 0xFFF) as u16;
         stat.tty_nr_minor = ((tty_nr >> 20) << 8) | (tty_nr & 0xFF);
     }
 
@@ -106,10 +107,10 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    stat.utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.cutime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.cstime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.cutime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.cstime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.priority = sc.next_i8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.nice = sc.next_i8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.num_threads = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

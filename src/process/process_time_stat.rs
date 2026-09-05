@@ -10,8 +10,8 @@ use crate::{
 
 #[derive(Default, Debug, Clone)]
 pub struct ProcessTimeStat {
-    pub utime: u32,
-    pub stime: u32,
+    pub utime: u64,
+    pub stime: u64,
 }
 
 impl ProcessTimeStat {
@@ -84,8 +84,8 @@ fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, ScannerError>
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    let utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     Ok(ProcessTimeStat {
         utime,

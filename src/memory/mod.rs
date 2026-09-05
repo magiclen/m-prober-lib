@@ -4,23 +4,23 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Mem {
-    pub total:     usize,
+    pub total:     u64,
     /// total - free - buffers - cached - total_cached; total_cached = cached + slab - s_unreclaim
-    pub used:      usize,
-    pub free:      usize,
-    pub shared:    usize,
-    pub buffers:   usize,
-    pub cache:     usize,
-    pub available: usize,
+    pub used:      u64,
+    pub free:      u64,
+    pub shared:    u64,
+    pub buffers:   u64,
+    pub cache:     u64,
+    pub available: u64,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct Swap {
-    pub total: usize,
+    pub total: u64,
     /// swap_total - swap_free - swap_cached
-    pub used:  usize,
-    pub free:  usize,
-    pub cache: usize,
+    pub used:  u64,
+    pub free:  u64,
+    pub cache: u64,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -55,14 +55,14 @@ pub fn free() -> Result<Free, ScannerError> {
 
     let mut sc: ScannerAscii<_, 768> = ScannerAscii::scan_path2("/proc/meminfo")?;
 
-    let mut item_values = [0usize; USEFUL_ITEMS.len()];
+    let mut item_values = [0u64; USEFUL_ITEMS.len()];
 
     for (i, &item) in USEFUL_ITEMS.iter().enumerate() {
         loop {
             let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             if label.starts_with(item) {
-                let value = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
                 item_values[i] = value * 1024;
 
