@@ -1,9 +1,32 @@
 use std::{
     fs::File,
-    io::{self, Read},
+    io::{self, ErrorKind, Read},
     path::Path,
+    str::{FromStr, from_utf8},
     time::Duration,
 };
+
+use crate::scanner_rust::ScannerError;
+
+/// Parse a number from ASCII bytes.
+#[inline]
+pub(crate) fn parse_number<T: FromStr>(value: &[u8]) -> Result<T, ScannerError>
+where
+    ScannerError: From<T::Err>, {
+    let s = from_utf8(value).map_err(|_| io::Error::from(ErrorKind::InvalidData))?;
+
+    Ok(s.parse::<T>()?)
+}
+
+/// Read a small sysfs file and parse its content as a number.
+#[inline]
+pub(crate) fn read_sysfs_number<T: FromStr, P: AsRef<Path>>(path: P) -> Result<T, ScannerError>
+where
+    ScannerError: From<T::Err>, {
+    let data = read_file(path, 64)?;
+
+    parse_number(data.trim_ascii_end())
+}
 
 /// Read a whole file into a `Vec` with a pre-allocated capacity, so small `/proc` files usually need only one read syscall.
 #[inline]
