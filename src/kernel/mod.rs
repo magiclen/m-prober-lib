@@ -1,8 +1,45 @@
-use std::io::{self, ErrorKind};
+use crate::{
+    scanner_rust::ScannerError,
+    utils::{uname, utsname_field_to_string},
+};
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+#[derive(Default, Debug, Clone)]
+pub struct Uname {
+    /// The operating system name, e.g. `Linux`.
+    pub sysname:  String,
+    /// The hostname.
+    pub nodename: String,
+    /// The kernel release, e.g. `6.17.0-40-generic`.
+    pub release:  String,
+    /// The kernel version, e.g. `#40~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Jun 23 16:48:12 UTC 2`.
+    pub version:  String,
+    /// The hardware name, e.g. `x86_64`.
+    pub machine:  String,
+}
 
-/// Get the kernel version by reading the `/proc/version` file.
+/// Get the system information using the `uname` function in libc.
+///
+/// ```rust
+/// use mprober_lib::kernel;
+///
+/// let uname = kernel::get_uname().unwrap();
+///
+/// println!("{uname:#?}");
+/// ```
+#[inline]
+pub fn get_uname() -> Result<Uname, ScannerError> {
+    let buffer = uname()?;
+
+    Ok(Uname {
+        sysname:  utsname_field_to_string(&buffer.sysname),
+        nodename: utsname_field_to_string(&buffer.nodename),
+        release:  utsname_field_to_string(&buffer.release),
+        version:  utsname_field_to_string(&buffer.version),
+        machine:  utsname_field_to_string(&buffer.machine),
+    })
+}
+
+/// Get the kernel version (the `release` field of `uname`) using the `uname` function in libc.
 ///
 /// ```rust
 /// use mprober_lib::kernel;
@@ -13,11 +50,7 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 /// ```
 #[inline]
 pub fn get_kernel_version() -> Result<String, ScannerError> {
-    let mut sc: ScannerAscii<_, 48> = ScannerAscii::scan_path2("/proc/version")?;
+    let buffer = uname()?;
 
-    sc.drop_next_bytes(14)?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-    let v = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-    Ok(unsafe { String::from_utf8_unchecked(v) })
+    Ok(utsname_field_to_string(&buffer.release))
 }

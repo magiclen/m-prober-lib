@@ -17,6 +17,29 @@ pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<
     Ok(buffer)
 }
 
+/// Call `uname(2)` and return the raw struct.
+#[inline]
+pub(crate) fn uname() -> io::Result<libc::utsname> {
+    let mut buffer: libc::utsname = unsafe { std::mem::zeroed() };
+
+    let rtn = unsafe { libc::uname(&mut buffer) };
+
+    if rtn != 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(buffer)
+}
+
+/// Convert a NUL-terminated field of `utsname` to a `String`.
+#[inline]
+pub(crate) fn utsname_field_to_string(field: &[libc::c_char]) -> String {
+    // `c_char` is signed on some targets, so every byte is cast instead of transmuting the slice.
+    let bytes: Vec<u8> = field.iter().map(|&c| c as u8).take_while(|&b| b != 0).collect();
+
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
 /// Get the number of clock ticks per second (`USER_HZ`), which is the unit of the time fields in `/proc`.
 #[inline]
 pub(crate) fn clock_ticks_per_second() -> u64 {
