@@ -1,4 +1,21 @@
-use std::time::Duration;
+use std::{
+    fs::File,
+    io::{self, Read},
+    path::Path,
+    time::Duration,
+};
+
+/// Read a whole file into a `Vec` with a pre-allocated capacity, so small `/proc` files usually need only one read syscall.
+#[inline]
+pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+
+    let mut buffer = Vec::with_capacity(capacity);
+
+    file.read_to_end(&mut buffer)?;
+
+    Ok(buffer)
+}
 
 /// Get the number of clock ticks per second (`USER_HZ`), which is the unit of the time fields in `/proc`.
 #[inline]

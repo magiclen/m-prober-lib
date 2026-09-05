@@ -1,11 +1,11 @@
-use std::{
-    io::{self, ErrorKind},
-    path::Path,
-};
+use std::io::{self, ErrorKind};
 
 use crate::{
-    process::ProcessStat,
-    scanner_rust::{Scanner, ScannerError},
+    process::{
+        ProcessStat,
+        process_stat::{read_process_stat_file, split_process_stat_line},
+    },
+    scanner_rust::{ScannerError, ScannerU8SliceAscii},
 };
 
 #[derive(Default, Debug, Clone)]
@@ -75,6 +75,24 @@ impl From<ProcessStat> for ProcessTimeStat {
     }
 }
 
+fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, ScannerError> {
+    let (_, fields) = split_process_stat_line(line)?;
+
+    let mut sc = ScannerU8SliceAscii::new(fields);
+
+    for _ in 0..11 {
+        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    }
+
+    let utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    Ok(ProcessTimeStat {
+        utime,
+        stime,
+    })
+}
+
 /// Get the time stat of a specific process found by ID by reading the `/proc/PID/stat` file.
 ///
 /// ```rust
@@ -84,32 +102,23 @@ impl From<ProcessStat> for ProcessTimeStat {
 ///
 /// println!("{process_time_stat:#?}");
 /// ```
+#[inline]
 pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
-    let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
+    let line = read_process_stat_file(pid)?;
 
-    let mut sc: Scanner<_, 96> = Scanner::scan_path2(stat_path)?;
+    parse_process_time_stat(&line)
+}
 
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::process_stat::tests::STAT_LINE;
 
-    loop {
-        let comm = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    #[test]
+    fn parse_time_stat_line() {
+        let time_stat = parse_process_time_stat(STAT_LINE).unwrap();
 
-        if comm.ends_with(b")") {
-            break;
-        }
+        assert_eq!(26, time_stat.utime);
+        assert_eq!(45, time_stat.stime);
     }
-
-    for _ in 0..11 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    }
-
-    let utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-    let time_stat = ProcessTimeStat {
-        utime,
-        stime,
-    };
-
-    Ok(time_stat)
 }
