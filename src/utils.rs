@@ -122,7 +122,8 @@ pub(crate) fn uname() -> io::Result<libc::utsname> {
 /// Convert a NUL-terminated field of `utsname` to a `String`.
 #[inline]
 pub(crate) fn utsname_field_to_string(field: &[libc::c_char]) -> String {
-    // `c_char` is signed on some targets, so every byte is cast instead of transmuting the slice.
+    // `c_char` is signed on x86 and unsigned on ARM, so every byte is cast instead of transmuting the slice.
+    #[allow(clippy::unnecessary_cast)]
     let bytes: Vec<u8> = field.iter().map(|&c| c as u8).take_while(|&b| b != 0).collect();
 
     String::from_utf8_lossy(&bytes).into_owned()

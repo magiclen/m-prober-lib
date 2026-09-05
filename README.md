@@ -36,6 +36,8 @@ println!("{:#?}", process::get_process_io(std::process::id()).unwrap());
 
 ## Benchmark
 
+The benchmarks are not part of the published package, so they have to be run from a clone of the repository.
+
 ```bash
 cargo bench
 ```

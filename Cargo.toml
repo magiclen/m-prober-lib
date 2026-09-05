@@ -18,6 +18,9 @@ scanner-rust = "3"
 chrono = "0.4"
 regex = "1"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dev-dependencies]
 bencher = "0.1.5"
 

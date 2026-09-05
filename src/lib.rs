@@ -36,10 +36,15 @@ println!("{:#?}", process::get_process_io(std::process::id()).unwrap());
 
 ## Benchmark
 
+The benchmarks are not part of the published package, so they have to be run from a clone of the repository.
+
 ```bash
 cargo bench
 ```
 */
+
+#[cfg(not(target_os = "linux"))]
+compile_error!("mprober-lib reads the `/proc` and `/sys` file systems, so it only supports Linux.");
 
 pub extern crate scanner_rust;
 
