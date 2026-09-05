@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     fs,
     hash::{Hash, Hasher},
-    io::ErrorKind,
     mem::take,
     path::{Path, PathBuf},
     thread::sleep,
@@ -86,10 +85,39 @@ enum ProcessProbe {
     Filtered(Option<u32>),
 }
 
+/// Convert the content of `/proc/PID/cmdline` to a string with the arguments separated by spaces.
+fn cmdline_to_string(mut data: Vec<u8>) -> String {
+    // Every argument ends with a NUL, so the last one is dropped instead of becoming a trailing space.
+    if data.last() == Some(&0) {
+        data.pop();
+    }
+
+    for e in data.iter_mut() {
+        if *e == 0 {
+            *e = b' ';
+        }
+    }
+
+    // Command line arguments are arbitrary bytes, so they may not be valid UTF-8.
+    String::from_utf8_lossy(&data).into_owned()
+}
+
+/// Check whether an error means that the process exited during the scan.
+/// The kernel returns `ENOENT` when the `/proc/PID` folder is gone and `ESRCH` when a file in it is read after the process was reaped.
+#[inline]
+fn is_process_gone(err: &Error) -> bool {
+    if let Error::IOError(err) = err {
+        matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
+    } else {
+        false
+    }
+}
+
 fn get_process_with_stat_inner<P: AsRef<Path>>(
     pid: u32,
     process_path: P,
     process_filter: &ProcessFilter,
+    btime: DateTime<Utc>,
 ) -> Result<ProcessProbe, Error> {
     let process_path = process_path.as_ref();
 
@@ -116,18 +144,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         return Ok(ProcessProbe::Filtered(ppid));
     }
 
-    let cmdline = {
-        let mut data = fs::read(process_path.join("cmdline"))?;
-
-        for e in data.iter_mut() {
-            if *e == 0 {
-                *e = b' ';
-            }
-        }
-
-        // Command line arguments are arbitrary bytes, so they may not be valid UTF-8.
-        String::from_utf8_lossy(&data).into_owned()
-    };
+    let cmdline = cmdline_to_string(fs::read(process_path.join("cmdline"))?);
 
     let program_filter_match = process_filter
         .program_filter
@@ -186,7 +203,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let rss_anon = stat.rss_anon;
 
     // `starttime` is in clock ticks since boot, not in milliseconds.
-    let start_time = get_btime() + clock_ticks_to_duration(stat.starttime);
+    let start_time = btime + clock_ticks_to_duration(stat.starttime);
 
     let process = Process {
         pid,
@@ -225,7 +242,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> {
     let process_path = Path::new("/proc").join(pid.to_string());
 
-    match get_process_with_stat_inner(pid, process_path, &ProcessFilter::default())? {
+    match get_process_with_stat_inner(pid, process_path, &ProcessFilter::default(), get_btime())? {
         ProcessProbe::Matched(process, stat) => Ok((process, stat)),
         ProcessProbe::Filtered(_) => unreachable!("the default filter matches every process"),
     }
@@ -269,6 +286,9 @@ pub fn get_processes_with_stat(
     // Every scanned process is recorded here (even the filtered ones), so descendants can be found no matter the scanning order.
     let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
 
+    // The boot time is computed once, so every process in this scan uses the same value.
+    let btime = get_btime();
+
     for dir_entry in Path::new("/proc").read_dir()? {
         let dir_entry = dir_entry?;
 
@@ -276,7 +296,7 @@ pub fn get_processes_with_stat(
             continue;
         };
 
-        match get_process_with_stat_inner(pid, dir_entry.path(), process_filter) {
+        match get_process_with_stat_inner(pid, dir_entry.path(), process_filter, btime) {
             Ok(ProcessProbe::Matched(process, stat)) => {
                 if process_filter.pid_filter.is_some() {
                     pid_ppid_map.insert(pid, process.ppid);
@@ -290,10 +310,7 @@ pub fn get_processes_with_stat(
                 }
             },
             Err(err) => {
-                // The process may have exited during the scan.
-                if let Error::IOError(err) = &err
-                    && err.kind() == ErrorKind::NotFound
-                {
+                if is_process_gone(&err) {
                     continue;
                 }
 
@@ -362,4 +379,18 @@ pub fn get_processes_with_cpu_utilization_in_percentage(
     }
 
     Ok(processes_with_cpu_percentage)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmdline_to_string_drops_trailing_nul() {
+        assert_eq!("sleep 100", cmdline_to_string(b"sleep\x00100\x00".to_vec()));
+        assert_eq!("", cmdline_to_string(Vec::new()));
+
+        // A process that rewrote its argv may leave no trailing NUL.
+        assert_eq!("postgres: writer", cmdline_to_string(b"postgres: writer".to_vec()));
+    }
 }

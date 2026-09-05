@@ -1,6 +1,5 @@
 use std::{
     mem::zeroed,
-    sync::OnceLock,
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -21,7 +20,9 @@ fn clock_gettime(clock_id: libc::clockid_t) -> Option<Duration> {
     Some(Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32))
 }
 
-/// Get the btime (boot time) by subtracting `CLOCK_BOOTTIME` from `CLOCK_REALTIME` using the `clock_gettime` function in libc. If those clocks are unavailable, the `/proc/uptime` file is used instead. The result is cached after the first call.
+/// Get the btime (boot time) by subtracting `CLOCK_BOOTTIME` from `CLOCK_REALTIME` using the `clock_gettime` function in libc. If those clocks are unavailable, the `/proc/uptime` file is used instead.
+///
+/// The value follows the system clock, so it changes when the clock is adjusted (e.g. by NTP), like the `btime` field of the `/proc/stat` file. Both clocks are read through the vDSO, so this function is cheap enough to be called every time.
 ///
 /// ```rust
 /// use mprober_lib::btime;
@@ -32,17 +33,11 @@ fn clock_gettime(clock_id: libc::clockid_t) -> Option<Duration> {
 /// ```
 #[inline]
 pub fn get_btime() -> DateTime<Utc> {
-    static BTIME: OnceLock<DateTime<Utc>> = OnceLock::new();
-
-    *BTIME.get_or_init(|| {
-        match (clock_gettime(libc::CLOCK_REALTIME), clock_gettime(libc::CLOCK_BOOTTIME)) {
-            (Some(realtime), Some(boottime)) => {
-                (UNIX_EPOCH + realtime.saturating_sub(boottime)).into()
-            },
-            _ => match get_uptime() {
-                Ok(uptime) => uptime.get_btime(),
-                Err(_) => UNIX_EPOCH.into(),
-            },
-        }
-    })
+    match (clock_gettime(libc::CLOCK_REALTIME), clock_gettime(libc::CLOCK_BOOTTIME)) {
+        (Some(realtime), Some(boottime)) => (UNIX_EPOCH + realtime.saturating_sub(boottime)).into(),
+        _ => match get_uptime() {
+            Ok(uptime) => uptime.get_btime(),
+            Err(_) => UNIX_EPOCH.into(),
+        },
+    }
 }
