@@ -1,6 +1,9 @@
+/// CPU times in `USER_HZ` clock ticks, summed from a `CPUStat`.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CPUTime {
+    /// `user + nice + system + irq + softirq + steal`
     pub non_idle: u64,
+    /// `idle + iowait`
     pub idle:     u64,
 }
 

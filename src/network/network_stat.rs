@@ -15,13 +15,21 @@ pub struct NetworkSpeed {
 /// Counters read from the `/proc/net/dev` file.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct NetworkStat {
+    /// Bytes received.
     pub receive_bytes:    u64,
+    /// Packets received.
     pub receive_packets:  u64,
+    /// Receive errors.
     pub receive_errors:   u64,
+    /// Packets dropped while receiving.
     pub receive_dropped:  u64,
+    /// Bytes transmitted.
     pub transmit_bytes:   u64,
+    /// Packets transmitted.
     pub transmit_packets: u64,
+    /// Transmit errors.
     pub transmit_errors:  u64,
+    /// Packets dropped while transmitting.
     pub transmit_dropped: u64,
 }
 

@@ -9,7 +9,9 @@ use crate::scanner_rust::{ScannerAscii, ScannerError};
 
 #[derive(Default, Debug, Clone)]
 pub struct Uptime {
+    /// The time since boot, including the time spent in suspend.
     pub total_uptime:      Duration,
+    /// The idle time summed over all CPUs, so it can be larger than `total_uptime`.
     pub all_cpu_idle_time: Duration,
 }
 

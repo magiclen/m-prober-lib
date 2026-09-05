@@ -10,6 +10,7 @@ use crate::{
     utils::{page_size, read_file},
 };
 
+/// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStat {
     pub state:        ProcessState,
@@ -20,19 +21,26 @@ pub struct ProcessStat {
     pub tty_nr_major: u16,
     pub tty_nr_minor: u32,
     pub tpgid:        Option<u32>,
+    /// Time spent in user mode, in clock ticks.
     pub utime:        u64,
+    /// Time spent in kernel mode, in clock ticks.
     pub stime:        u64,
+    /// Time the waited-for children spent in user mode, in clock ticks.
     pub cutime:       u64,
+    /// Time the waited-for children spent in kernel mode, in clock ticks.
     pub cstime:       u64,
     pub priority:     i8,
     pub nice:         i8,
     pub num_threads:  usize,
+    /// The time the process started after system boot, in clock ticks.
     pub starttime:    u64,
     /// size, VmSize (total program size)
     pub vsize:        usize,
     /// resident, VmRSS (resident set size)
     pub rss:          usize,
+    /// The soft limit on the RSS.
     pub rsslim:       usize,
+    /// The CPU number last executed on.
     pub processor:    usize,
     pub rt_priority:  u8,
     /// RssFile + RssShmem (resident shared size)

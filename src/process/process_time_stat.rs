@@ -8,14 +8,19 @@ use crate::{
     scanner_rust::{ScannerError, ScannerU8SliceAscii},
 };
 
+/// CPU times of a process in `USER_HZ` clock ticks.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessTimeStat {
+    /// Time spent in user mode, in clock ticks.
     pub utime: u64,
+    /// Time spent in kernel mode, in clock ticks.
     pub stime: u64,
 }
 
 impl ProcessTimeStat {
     /// Compute CPU utilization in percentage between two `ProcessTimeStat` instances at different time. If it returns `1.0`, means `100%`.
+    ///
+    /// `total_cpu_time` is the total time of all CPUs, so a process using one whole core on a 4-core machine gives `0.25`.
     ///
     /// ```rust
     /// use std::{thread::sleep, time::Duration};
