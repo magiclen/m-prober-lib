@@ -1,5 +1,6 @@
 #[allow(clippy::module_inception)]
 mod process;
+mod process_fd;
 mod process_filter;
 mod process_io;
 mod process_stat;
@@ -9,6 +10,7 @@ mod process_time_stat;
 mod scheduling_policy;
 
 pub use process::*;
+pub use process_fd::*;
 pub use process_filter::*;
 pub use process_io::*;
 pub use process_stat::*;
