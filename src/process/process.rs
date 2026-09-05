@@ -16,7 +16,7 @@ use crate::{
     cpu::get_average_cpu_stat,
     process::{
         ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_stat,
-        get_process_status, get_process_time_stat,
+        get_process_status, get_process_time_stat, process_stat::get_process_ppid,
     },
     scanner_rust::ScannerError,
     utils::clock_ticks_to_duration,
@@ -61,33 +61,42 @@ impl PartialEq for Process {
     }
 }
 
+// This enum is short-lived, so boxing the matched process would only add an allocation per process.
+#[allow(clippy::large_enum_variant)]
+enum ProcessProbe {
+    Matched(Process, ProcessStat),
+    /// The parent PID is only looked up when a PID filter needs it for finding descendants.
+    Filtered(Option<u32>),
+}
+
 fn get_process_with_stat_inner<P: AsRef<Path>>(
     pid: u32,
     process_path: P,
     process_filter: &ProcessFilter,
-) -> Result<Option<(Process, ProcessStat)>, ScannerError> {
+) -> Result<ProcessProbe, ScannerError> {
     let process_path = process_path.as_ref();
-
-    let mut program_filter_match = true;
 
     let status = get_process_status(pid)?;
 
-    if let Some(uid_filter) = process_filter.uid_filter
-        && status.real_uid != uid_filter
-        && status.effective_uid != uid_filter
-        && status.saved_set_uid != uid_filter
-        && status.fs_uid != uid_filter
-    {
-        return Ok(None);
-    }
+    let uid_filtered = process_filter.uid_filter.is_some_and(|uid_filter| {
+        status.real_uid != uid_filter
+            && status.effective_uid != uid_filter
+            && status.saved_set_uid != uid_filter
+            && status.fs_uid != uid_filter
+    });
 
-    if let Some(gid_filter) = process_filter.gid_filter
-        && status.real_gid != gid_filter
-        && status.effective_gid != gid_filter
-        && status.saved_set_gid != gid_filter
-        && status.fs_gid != gid_filter
-    {
-        return Ok(None);
+    let gid_filtered = process_filter.gid_filter.is_some_and(|gid_filter| {
+        status.real_gid != gid_filter
+            && status.effective_gid != gid_filter
+            && status.saved_set_gid != gid_filter
+            && status.fs_gid != gid_filter
+    });
+
+    if uid_filtered || gid_filtered {
+        let ppid =
+            if process_filter.pid_filter.is_some() { Some(get_process_ppid(pid)?) } else { None };
+
+        return Ok(ProcessProbe::Filtered(ppid));
     }
 
     let cmdline = {
@@ -99,14 +108,14 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
             }
         }
 
-        unsafe { String::from_utf8_unchecked(data) }
+        // Command line arguments are arbitrary bytes, so they may not be valid UTF-8.
+        String::from_utf8_lossy(&data).into_owned()
     };
 
-    if let Some(program_filter) = process_filter.program_filter.as_ref()
-        && !program_filter.is_match(&cmdline)
-    {
-        program_filter_match = false;
-    }
+    let program_filter_match = process_filter
+        .program_filter
+        .as_ref()
+        .is_none_or(|program_filter| program_filter.is_match(&cmdline));
 
     let mut stat = get_process_stat(pid)?;
 
@@ -114,7 +123,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         && let Some(program_filter) = process_filter.program_filter.as_ref()
         && !program_filter.is_match(&stat.comm)
     {
-        return Ok(None);
+        return Ok(ProcessProbe::Filtered(Some(stat.ppid)));
     }
 
     let effective_uid = status.effective_uid;
@@ -141,10 +150,10 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         match tty.as_ref() {
             Some(tty) => {
                 if !tty_filter.is_match(tty) {
-                    return Ok(None);
+                    return Ok(ProcessProbe::Filtered(Some(ppid)));
                 }
             },
-            None => return Ok(None),
+            None => return Ok(ProcessProbe::Filtered(Some(ppid))),
         }
     }
 
@@ -180,7 +189,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         start_time,
     };
 
-    Ok(Some((process, stat)))
+    Ok(ProcessProbe::Matched(process, stat))
 }
 
 /// Get information of a specific process found by ID by reading files in the `/proc/PID` folder.
@@ -196,10 +205,32 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), ScannerError> {
     let process_path = Path::new("/proc").join(pid.to_string());
 
-    get_process_with_stat_inner(pid, process_path, &ProcessFilter::default()).map(|o| o.unwrap())
+    match get_process_with_stat_inner(pid, process_path, &ProcessFilter::default())? {
+        ProcessProbe::Matched(process, stat) => Ok((process, stat)),
+        ProcessProbe::Filtered(_) => unreachable!("the default filter matches every process"),
+    }
 }
 
-/// Get process information by reading files in the `/proc/PID` folders.
+/// Check whether `pid` is `ancestor` itself or one of its descendants by walking up the parent chain.
+fn is_process_or_descendant(pid: u32, ancestor: u32, pid_ppid_map: &BTreeMap<u32, u32>) -> bool {
+    let mut current = pid;
+
+    // The chain normally ends at PID 0, which is not in the map, but the step count is capped in case PIDs were reused during the scan.
+    for _ in 0..=pid_ppid_map.len() {
+        if current == ancestor {
+            return true;
+        }
+
+        match pid_ppid_map.get(&current) {
+            Some(&ppid) => current = ppid,
+            None => return false,
+        }
+    }
+
+    false
+}
+
+/// Get process information by reading files in the `/proc/PID` folders. When `pid_filter` is set, the process and all of its descendants are returned.
 ///
 /// ```rust
 /// use mprober_lib::process;
@@ -213,91 +244,51 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Scanner
 pub fn get_processes_with_stat(
     process_filter: &ProcessFilter,
 ) -> Result<Vec<(Process, ProcessStat)>, ScannerError> {
-    let mut processes_with_stats = Vec::new();
+    let mut processes_with_stat = Vec::new();
 
-    let proc = Path::new("/proc");
+    // Every scanned process is recorded here (even the filtered ones), so descendants can be found no matter the scanning order.
+    let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
 
-    if let Some(pid_filter) = process_filter.pid_filter.as_ref().copied() {
-        let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
+    for dir_entry in Path::new("/proc").read_dir()? {
+        let dir_entry = dir_entry?;
 
-        for dir_entry in proc.read_dir()? {
-            let dir_entry = dir_entry?;
+        let Some(pid) = dir_entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
+            continue;
+        };
 
-            if let Some(file_name) = dir_entry.file_name().to_str()
-                && let Ok(pid) = file_name.parse::<u32>()
-            {
-                let process_path = dir_entry.path();
-
-                match get_process_with_stat_inner(pid, process_path, process_filter) {
-                    Ok(r) => {
-                        if let Some((process, stat)) = r {
-                            if pid != pid_filter && process.ppid != pid_filter {
-                                let mut not_related = true;
-
-                                let mut p_ppid = pid_ppid_map.get(&process.ppid);
-
-                                while let Some(ppid) = p_ppid.copied() {
-                                    if ppid == pid_filter {
-                                        not_related = false;
-
-                                        break;
-                                    }
-
-                                    p_ppid = pid_ppid_map.get(&ppid);
-                                }
-
-                                if not_related {
-                                    continue;
-                                }
-                            }
-
-                            pid_ppid_map.insert(pid, process.ppid);
-
-                            processes_with_stats.push((process, stat));
-                        }
-                    },
-                    Err(err) => {
-                        if let ScannerError::IOError(err) = &err
-                            && err.kind() == ErrorKind::NotFound
-                        {
-                            continue;
-                        }
-
-                        return Err(err);
-                    },
+        match get_process_with_stat_inner(pid, dir_entry.path(), process_filter) {
+            Ok(ProcessProbe::Matched(process, stat)) => {
+                if process_filter.pid_filter.is_some() {
+                    pid_ppid_map.insert(pid, process.ppid);
                 }
-            }
-        }
-    } else {
-        for dir_entry in proc.read_dir()? {
-            let dir_entry = dir_entry?;
 
-            if let Some(file_name) = dir_entry.file_name().to_str()
-                && let Ok(pid) = file_name.parse::<u32>()
-            {
-                let process_path = dir_entry.path();
-
-                match get_process_with_stat_inner(pid, process_path, process_filter) {
-                    Ok(r) => {
-                        if let Some((process, stat)) = r {
-                            processes_with_stats.push((process, stat));
-                        }
-                    },
-                    Err(err) => {
-                        if let ScannerError::IOError(err) = &err
-                            && err.kind() == ErrorKind::NotFound
-                        {
-                            continue;
-                        }
-
-                        return Err(err);
-                    },
+                processes_with_stat.push((process, stat));
+            },
+            Ok(ProcessProbe::Filtered(ppid)) => {
+                if let Some(ppid) = ppid {
+                    pid_ppid_map.insert(pid, ppid);
                 }
-            }
+            },
+            Err(err) => {
+                // The process may have exited during the scan.
+                if let ScannerError::IOError(err) = &err
+                    && err.kind() == ErrorKind::NotFound
+                {
+                    continue;
+                }
+
+                return Err(err);
+            },
         }
     }
 
-    Ok(processes_with_stats)
+    if let Some(pid_filter) = process_filter.pid_filter {
+        processes_with_stat.retain(|(process, _)| {
+            is_process_or_descendant(process.pid, pid_filter, &pid_ppid_map)
+        });
+    }
+
+    Ok(processes_with_stat)
 }
 
 /// Get process information by reading files in the `/proc/PID` folders and measure the cpu utilization in percentage within a specific time interval. If the number it returns is `1.0`, means `100%`.

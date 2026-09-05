@@ -64,6 +64,20 @@ pub(crate) fn split_process_stat_line(line: &[u8]) -> Result<(&[u8], &[u8]), Sca
     Ok((&line[(start + 1)..end], &line[(end + 1)..]))
 }
 
+/// Get only the parent PID of a process by reading the `/proc/PID/stat` file.
+pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, ScannerError> {
+    let line = read_process_stat_file(pid)?;
+
+    let (_, fields) = split_process_stat_line(&line)?;
+
+    let mut sc = ScannerU8SliceAscii::new(fields);
+
+    // Skip the state field.
+    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    Ok(sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+}
+
 fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, ScannerError> {
     let (comm, fields) = split_process_stat_line(line)?;
 
