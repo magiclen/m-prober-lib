@@ -137,7 +137,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
     read_cpu_stat(&mut sc)
 }
 
-/// Get all CPUs' stats with or without the average by reading the `/proc/stat` file.
+/// Get all CPUs' stats with or without the average by reading the `/proc/stat` file. The stats are in the order of the `cpuN` lines, and offline CPUs are not listed, so the index is not always the CPU number.
 ///
 /// ```rust
 /// use mprober_lib::cpu;
@@ -199,7 +199,7 @@ pub fn get_average_cpu_utilization_in_percentage(interval: Duration) -> Result<f
     Ok(pre_cpu_stat.compute_cpu_utilization_in_percentage(&cpu_stat))
 }
 
-/// Calculate all CPU utilization in percentage with or without the average within a specific time interval. It will cause the current thread to sleep. If the number it returns is `1.0`, means `100%`.
+/// Calculate all CPU utilization in percentage with or without the average within a specific time interval. It will cause the current thread to sleep. If the number it returns is `1.0`, means `100%`. The two reads are matched by position, so a CPU going online or offline in between shifts the result.
 ///
 /// ```rust
 /// use std::time::Duration;
