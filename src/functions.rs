@@ -18,32 +18,33 @@ pub fn format_duration(duration: Duration) -> String {
     let minutes = sec / 60;
     let seconds = sec % 60;
 
-    let mut s = String::with_capacity(10);
+    let mut s = String::with_capacity(48);
 
     if days > 0 {
-        s.write_fmt(format_args!("{} day", days)).unwrap();
+        write!(s, "{days} day").unwrap();
 
-        if days > 1 {
+        if days != 1 {
             s.push('s');
         }
 
         s.push_str(", ");
     }
 
-    if hours > 0 || (days > 0) && (minutes > 0 || seconds > 0) {
-        s.write_fmt(format_args!("{} hour", hours)).unwrap();
+    // A zero unit is still shown when a bigger unit and a smaller unit are both shown, so the chain has no gap.
+    if hours > 0 || (days > 0 && (minutes > 0 || seconds > 0)) {
+        write!(s, "{hours} hour").unwrap();
 
-        if hours > 1 {
+        if hours != 1 {
             s.push('s');
         }
 
         s.push_str(", ");
     }
 
-    if minutes > 0 || (hours > 0 && seconds > 0) {
-        s.write_fmt(format_args!("{} minute", minutes)).unwrap();
+    if minutes > 0 || ((days > 0 || hours > 0) && seconds > 0) {
+        write!(s, "{minutes} minute").unwrap();
 
-        if minutes > 1 {
+        if minutes != 1 {
             s.push('s');
         }
 
@@ -51,26 +52,24 @@ pub fn format_duration(duration: Duration) -> String {
     }
 
     if seconds > 0 {
-        s.write_fmt(format_args!("{} second", seconds)).unwrap();
+        write!(s, "{seconds} second").unwrap();
 
-        if seconds > 1 {
+        if seconds != 1 {
             s.push('s');
         }
 
         s.push_str(", ");
     }
 
-    debug_assert!(s.len() >= 2);
+    if s.is_empty() {
+        return String::from("0 seconds");
+    }
 
-    if let Some(index) = s.as_str()[..(s.len() - 2)].rfind(", ") {
+    s.truncate(s.len() - 2);
+
+    if let Some(index) = s.rfind(", ") {
         s.insert_str(index + 2, "and ");
     }
 
-    let mut v = s.into_bytes();
-
-    unsafe {
-        v.set_len(v.len() - 2);
-
-        String::from_utf8_unchecked(v)
-    }
+    s
 }
