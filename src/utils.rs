@@ -21,7 +21,7 @@ where
 /// Read a small sysfs file and return its content without the trailing whitespace.
 #[inline]
 pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    let data = read_file(path, 64)?;
+    let data = read_single_record_file(path, 64)?;
 
     Ok(String::from_utf8_lossy(data.trim_ascii_end()).into_owned())
 }
@@ -31,12 +31,12 @@ pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
 pub(crate) fn read_sysfs_number<T: FromStr, P: AsRef<Path>>(path: P) -> Result<T, ScannerError>
 where
     ScannerError: From<T::Err>, {
-    let data = read_file(path, 64)?;
+    let data = read_single_record_file(path, 64)?;
 
     parse_number(data.trim_ascii_end())
 }
 
-/// Read a whole file into a `Vec` with a pre-allocated capacity, so small `/proc` files usually need only one read syscall.
+/// Read a whole file into a `Vec` with a pre-allocated capacity. Multi-record files in `/proc` (e.g. `/proc/cpuinfo`) return at most one page per read, so this reads until EOF.
 #[inline]
 pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
@@ -44,6 +44,28 @@ pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<
     let mut buffer = Vec::with_capacity(capacity);
 
     file.read_to_end(&mut buffer)?;
+
+    Ok(buffer)
+}
+
+/// Read a file that the kernel generates as a single record (e.g. `/proc/PID/stat` or a sysfs attribute). Such a file is returned completely by one read when it fits into `capacity` bytes, so the extra read for EOF is skipped. A larger file is still read completely.
+#[inline]
+pub(crate) fn read_single_record_file<P: AsRef<Path>>(
+    path: P,
+    capacity: usize,
+) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+
+    let mut buffer = vec![0u8; capacity];
+
+    let size = file.read(&mut buffer)?;
+
+    if size == capacity {
+        // The record may be larger than the buffer, so the rest is read in the usual way.
+        file.read_to_end(&mut buffer)?;
+    } else {
+        buffer.truncate(size);
+    }
 
     Ok(buffer)
 }

@@ -7,7 +7,7 @@ use std::{
 use crate::{
     process::ProcessState,
     scanner_rust::{Scanner, ScannerError, ScannerU8SliceAscii},
-    utils::{page_size, read_file},
+    utils::{page_size, read_single_record_file},
 };
 
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
@@ -54,7 +54,7 @@ pub struct ProcessStat {
 pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, ScannerError> {
     let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
 
-    Ok(read_file(stat_path, 512)?)
+    Ok(read_single_record_file(stat_path, 1024)?)
 }
 
 /// Split a `/proc/PID/stat` line into the `comm` part and the fields after it.

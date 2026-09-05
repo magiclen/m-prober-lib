@@ -82,6 +82,7 @@ impl CPUStat {
 }
 
 /// Read the ten time fields that follow a `cpu` label in `/proc/stat`.
+#[inline]
 fn read_cpu_stat<R: Read, const N: usize>(
     sc: &mut ScannerAscii<R, N>,
 ) -> Result<CPUStat, ScannerError> {
