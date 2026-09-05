@@ -18,17 +18,25 @@ use crate::{
 #[derive(Debug, Clone, Eq)]
 pub struct Volume {
     /// The device name as it appears in the `/proc/diskstats` file, e.g. `nvme0n1p1`.
-    pub device:    String,
+    pub device:      String,
     /// The I/O counters of the device.
-    pub stat:      VolumeStat,
+    pub stat:        VolumeStat,
     /// The size of the file system in bytes.
-    pub size:      u64,
-    /// `size - available`, which includes the blocks reserved for the root user.
-    pub used:      u64,
+    pub size:        u64,
+    /// `size - available`, which includes the blocks reserved for the root user. The `df` command shows `size - free` instead.
+    pub used:        u64,
     /// The space available to unprivileged users in bytes.
-    pub available: u64,
+    pub available:   u64,
+    /// The free space in bytes, including the blocks reserved for the root user.
+    pub free:        u64,
+    /// The total number of inodes. Some file systems (e.g. btrfs) report `0` because they allocate inodes dynamically.
+    pub inodes:      u64,
+    /// The number of free inodes.
+    pub inodes_free: u64,
+    /// The file system type, e.g. `ext4`.
+    pub fs_type:     String,
     /// Every path this device is mounted at. The sizes above are those of the first one.
-    pub points:    Vec<String>,
+    pub points:      Vec<String>,
 }
 
 impl Hash for Volume {
@@ -45,8 +53,18 @@ impl PartialEq for Volume {
     }
 }
 
-/// Get the total, used and available sizes of the file system at `point` in bytes. It returns `None` when the mount point cannot be reached.
-fn statvfs(point: &str) -> Option<(u64, u64, u64)> {
+/// The sizes of a file system, in bytes and in inodes.
+struct FsUsage {
+    size:        u64,
+    used:        u64,
+    available:   u64,
+    free:        u64,
+    inodes:      u64,
+    inodes_free: u64,
+}
+
+/// Get the sizes of the file system at `point`. It returns `None` when the mount point cannot be reached.
+fn statvfs(point: &str) -> Option<FsUsage> {
     let path = CString::new(point.as_bytes()).ok()?;
 
     let mut stats: libc::statvfs = unsafe { zeroed() };
@@ -63,12 +81,16 @@ fn statvfs(point: &str) -> Option<(u64, u64, u64)> {
         let fragment_size = stats.f_frsize as u64;
         let blocks = stats.f_blocks as u64;
         let available_blocks = stats.f_bavail as u64;
+        let free_blocks = stats.f_bfree as u64;
 
-        Some((
-            fragment_size * blocks,
-            fragment_size * blocks.saturating_sub(available_blocks),
-            fragment_size * available_blocks,
-        ))
+        Some(FsUsage {
+            size:        fragment_size * blocks,
+            used:        fragment_size * blocks.saturating_sub(available_blocks),
+            available:   fragment_size * available_blocks,
+            free:        fragment_size * free_blocks,
+            inodes:      stats.f_files as u64,
+            inodes_free: stats.f_ffree as u64,
+        })
     }
 }
 
@@ -100,7 +122,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
         )
         .into_owned();
 
-        if let Some(points) = mounts.remove(&device) {
+        if let Some(mount) = mounts.remove(&device) {
             let reads_completed =
                 sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
@@ -133,8 +155,33 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
                 sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
             );
 
+            let weighted_io_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
+
+            // The discard and flush fields exist since Linux 4.18 and 5.5 respectively.
+            let discards_completed =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            // discards merged
+            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            let discard_bytes =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
+
+            let discard_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
+
+            let flushes_completed =
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+            let flush_time = Duration::from_millis(
+                sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
+            );
+
             // A mount point can be unreachable (a disconnected network device, a directory without the search permission), so a failure here only skips this volume.
-            let Some((size, used, available)) = statvfs(&points[0]) else {
+            let Some(usage) = statvfs(&mount.points[0]) else {
                 sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
                 continue;
@@ -149,15 +196,25 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
                 write_time,
                 io_in_progress,
                 io_time,
+                weighted_io_time,
+                discards_completed,
+                discard_bytes,
+                discard_time,
+                flushes_completed,
+                flush_time,
             };
 
             let volume = Volume {
                 device,
                 stat,
-                size,
-                used,
-                available,
-                points,
+                size: usage.size,
+                used: usage.used,
+                available: usage.available,
+                free: usage.free,
+                inodes: usage.inodes,
+                inodes_free: usage.inodes_free,
+                fs_type: mount.fs_type,
+                points: mount.points,
             };
 
             volumes.push(volume);
