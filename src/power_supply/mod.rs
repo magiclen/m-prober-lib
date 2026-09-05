@@ -1,4 +1,8 @@
+mod power_cap;
+
 use std::{fs, io::ErrorKind, path::Path};
+
+pub use power_cap::*;
 
 use crate::{
     Error,
@@ -7,6 +11,7 @@ use crate::{
 
 /// One power supply under `/sys/class/power_supply`, e.g. a laptop battery or an AC adapter. Every driver reports a different set of attributes, so most fields are optional.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PowerSupply {
     /// The name of the device, e.g. `BAT0` or `AC`.
     pub name:               String,

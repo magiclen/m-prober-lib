@@ -11,6 +11,7 @@ use crate::{
 
 /// One temperature sensor of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Temperature {
     /// The label of the sensor, e.g. `Package id 0` or `Composite`.
     pub label:    Option<String>,
@@ -24,6 +25,7 @@ pub struct Temperature {
 
 /// One fan of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fan {
     /// The label of the fan.
     pub label: Option<String>,
@@ -33,6 +35,7 @@ pub struct Fan {
 
 /// One voltage sensor of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Voltage {
     /// The label of the sensor, e.g. `Vcore` or `+12V`.
     pub label:   Option<String>,
@@ -46,6 +49,7 @@ pub struct Voltage {
 
 /// One power sensor of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Power {
     /// The label of the sensor, e.g. `PPT` or `package`.
     pub label:   Option<String>,
@@ -55,8 +59,53 @@ pub struct Power {
     pub cap:     Option<f64>,
 }
 
+/// One current sensor of a hardware monitoring device.
+#[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Current {
+    /// The label of the sensor.
+    pub label:   Option<String>,
+    /// The current in amperes.
+    pub current: f64,
+    /// The low threshold in amperes.
+    pub min:     Option<f64>,
+    /// The high threshold in amperes.
+    pub max:     Option<f64>,
+}
+
+/// One energy sensor of a hardware monitoring device, which counts up as energy is consumed.
+#[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Energy {
+    /// The label of the sensor.
+    pub label:   Option<String>,
+    /// The energy consumed so far in joules.
+    pub current: f64,
+}
+
+/// One humidity sensor of a hardware monitoring device.
+#[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Humidity {
+    /// The label of the sensor.
+    pub label:   Option<String>,
+    /// The relative humidity in percent.
+    pub current: f64,
+}
+
+/// One chassis intrusion detector of a hardware monitoring device.
+#[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Intrusion {
+    /// The label of the detector.
+    pub label: Option<String>,
+    /// Whether the chassis was opened. It stays set until an administrator clears it.
+    pub alarm: bool,
+}
+
 /// One hardware monitoring device under `/sys/class/hwmon`.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HwmonDevice {
     /// The name of the chip or driver, e.g. `coretemp` or `nvme`.
     pub name:         String,
@@ -70,6 +119,14 @@ pub struct HwmonDevice {
     pub voltages:     Vec<Voltage>,
     /// The power sensors of this device, ordered by their sensor number.
     pub powers:       Vec<Power>,
+    /// The current sensors of this device, ordered by their sensor number.
+    pub currents:     Vec<Current>,
+    /// The energy sensors of this device, ordered by their sensor number.
+    pub energies:     Vec<Energy>,
+    /// The humidity sensors of this device, ordered by their sensor number.
+    pub humidities:   Vec<Humidity>,
+    /// The chassis intrusion detectors of this device, ordered by their sensor number.
+    pub intrusions:   Vec<Intrusion>,
 }
 
 /// Extract `N` from a file name like `tempN_input`.
@@ -96,6 +153,10 @@ struct SensorIndices {
     fans:         Vec<usize>,
     voltages:     Vec<usize>,
     powers:       Vec<usize>,
+    currents:     Vec<usize>,
+    energies:     Vec<usize>,
+    humidities:   Vec<usize>,
+    intrusions:   Vec<usize>,
 }
 
 fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
@@ -117,6 +178,14 @@ fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
             indices.temperatures.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "fan", "_input") {
             indices.fans.push(index);
+        } else if let Some(index) = parse_sensor_index(file_name, "curr", "_input") {
+            indices.currents.push(index);
+        } else if let Some(index) = parse_sensor_index(file_name, "energy", "_input") {
+            indices.energies.push(index);
+        } else if let Some(index) = parse_sensor_index(file_name, "humidity", "_input") {
+            indices.humidities.push(index);
+        } else if let Some(index) = parse_sensor_index(file_name, "intrusion", "_alarm") {
+            indices.intrusions.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "in", "_input") {
             indices.voltages.push(index);
         } else if let Some(index) = parse_sensor_index(file_name, "power", "_input")
@@ -131,6 +200,10 @@ fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
     indices.fans.sort_unstable();
     indices.voltages.sort_unstable();
     indices.powers.sort_unstable();
+    indices.currents.sort_unstable();
+    indices.energies.sort_unstable();
+    indices.humidities.sort_unstable();
+    indices.intrusions.sort_unstable();
 
     // A power sensor may have both an `_input` file and an `_average` file.
     indices.powers.dedup();
@@ -209,6 +282,65 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
         });
     }
 
+    let mut currents = Vec::with_capacity(indices.currents.len());
+
+    for index in indices.currents {
+        // The driver reports a current in milliamperes.
+        let Some(current) = read_milli(device_path.join(format!("curr{index}_input"))) else {
+            continue;
+        };
+
+        currents.push(Current {
+            label: read_sysfs_string(device_path.join(format!("curr{index}_label"))).ok(),
+            current,
+            min: read_milli(device_path.join(format!("curr{index}_min"))),
+            max: read_milli(device_path.join(format!("curr{index}_max"))),
+        });
+    }
+
+    let mut energies = Vec::with_capacity(indices.energies.len());
+
+    for index in indices.energies {
+        // The driver reports an energy in microjoules.
+        let Some(current) = read_micro(device_path.join(format!("energy{index}_input"))) else {
+            continue;
+        };
+
+        energies.push(Energy {
+            label: read_sysfs_string(device_path.join(format!("energy{index}_label"))).ok(),
+            current,
+        });
+    }
+
+    let mut humidities = Vec::with_capacity(indices.humidities.len());
+
+    for index in indices.humidities {
+        // The driver reports a humidity in thousandths of a percent.
+        let Some(current) = read_milli(device_path.join(format!("humidity{index}_input"))) else {
+            continue;
+        };
+
+        humidities.push(Humidity {
+            label: read_sysfs_string(device_path.join(format!("humidity{index}_label"))).ok(),
+            current,
+        });
+    }
+
+    let mut intrusions = Vec::with_capacity(indices.intrusions.len());
+
+    for index in indices.intrusions {
+        let Ok(alarm) =
+            read_sysfs_number::<u8, _>(device_path.join(format!("intrusion{index}_alarm")))
+        else {
+            continue;
+        };
+
+        intrusions.push(Intrusion {
+            label: read_sysfs_string(device_path.join(format!("intrusion{index}_label"))).ok(),
+            alarm: alarm == 1,
+        });
+    }
+
     Some(HwmonDevice {
         name,
         device,
@@ -216,6 +348,10 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
         fans,
         voltages,
         powers,
+        currents,
+        energies,
+        humidities,
+        intrusions,
     })
 }
 
