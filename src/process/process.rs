@@ -22,22 +22,35 @@ use crate::{
     utils::clock_ticks_to_duration,
 };
 
+/// One running process. Two instances are equal when their PIDs are equal.
 #[derive(Debug, Clone, Eq)]
 pub struct Process {
+    /// The ID of this process.
     pub pid:                u32,
+    /// The effective user ID.
     pub effective_uid:      u32,
+    /// The effective group ID.
     pub effective_gid:      u32,
+    /// The state of the process.
     pub state:              ProcessState,
+    /// The ID of the parent process.
     pub ppid:               u32,
+    /// The program name, which is the `comm` field of the `/proc/PID/stat` file.
     pub program:            String,
+    /// The command line with its NUL separators replaced by spaces. It is empty for a kernel thread.
     pub cmdline:            String,
     /// The path of the executable. It is `None` for kernel threads or when the permission is denied.
     /// The kernel appends ` (deleted)` to the path when the executable file has been removed or replaced.
     pub exe:                Option<PathBuf>,
+    /// The name of the controlling terminal, e.g. `pts/0`. It is `None` when there is none.
     pub tty:                Option<String>,
+    /// The scheduling priority.
     pub priority:           i8,
+    /// The real-time scheduling priority. It is `None` for a process not running under a real-time policy.
     pub real_time_priority: Option<u8>,
+    /// The nice value, from `-20` (high priority) to `19` (low priority).
     pub nice:               i8,
+    /// The number of threads in this process.
     pub threads:            usize,
     /// Virtual Set Size (VIRT)
     pub vsz:                usize,
@@ -47,6 +60,7 @@ pub struct Process {
     pub rss_shared:         usize,
     /// Resident Anonymous Memory
     pub rss_anon:           usize,
+    /// The time this process started, computed from the boot time.
     pub start_time:         DateTime<Utc>,
 }
 

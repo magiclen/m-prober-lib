@@ -6,6 +6,7 @@ use std::{
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
+/// The rates computed between two `ProcessIO` instances.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessIOSpeed {
     /// Bytes read from the storage layer per second.

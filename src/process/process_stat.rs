@@ -14,13 +14,21 @@ use crate::{
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStat {
+    /// The state of the process.
     pub state:        ProcessState,
+    /// The file name of the executable, without the surrounding parentheses. It may contain spaces.
     pub comm:         String,
+    /// The PID of the parent process.
     pub ppid:         u32,
+    /// The process group ID.
     pub pgrp:         u32,
+    /// The session ID.
     pub session:      u32,
+    /// The major number of the controlling terminal.
     pub tty_nr_major: u16,
+    /// The minor number of the controlling terminal.
     pub tty_nr_minor: u32,
+    /// The process group ID of the foreground process group of the controlling terminal.
     pub tpgid:        Option<u32>,
     /// Time spent in user mode, in clock ticks.
     pub utime:        u64,
@@ -30,8 +38,11 @@ pub struct ProcessStat {
     pub cutime:       u64,
     /// Time the waited-for children spent in kernel mode, in clock ticks.
     pub cstime:       u64,
+    /// The scheduling priority.
     pub priority:     i8,
+    /// The nice value, from `-20` (high priority) to `19` (low priority).
     pub nice:         i8,
+    /// The number of threads in this process.
     pub num_threads:  usize,
     /// The time the process started after system boot, in clock ticks.
     pub starttime:    u64,
@@ -43,6 +54,7 @@ pub struct ProcessStat {
     pub rsslim:       u64,
     /// The CPU number last executed on.
     pub processor:    usize,
+    /// The real-time scheduling priority. It is `0` for a process not running under a real-time policy.
     pub rt_priority:  u8,
     /// RssFile + RssShmem (resident shared size)
     pub shared:       usize,

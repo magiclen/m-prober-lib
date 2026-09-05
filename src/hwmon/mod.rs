@@ -9,6 +9,7 @@ use crate::{
     utils::{read_sysfs_number, read_sysfs_string},
 };
 
+/// One temperature sensor of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
 pub struct Temperature {
     /// The label of the sensor, e.g. `Package id 0` or `Composite`.
@@ -21,6 +22,7 @@ pub struct Temperature {
     pub critical: Option<f64>,
 }
 
+/// One fan of a hardware monitoring device.
 #[derive(Default, Debug, Clone)]
 pub struct Fan {
     /// The label of the fan.
@@ -29,11 +31,14 @@ pub struct Fan {
     pub rpm:   u32,
 }
 
+/// One hardware monitoring device under `/sys/class/hwmon`.
 #[derive(Default, Debug, Clone)]
 pub struct HwmonDevice {
     /// The name of the chip or driver, e.g. `coretemp` or `nvme`.
     pub name:         String,
+    /// The temperature sensors of this device, ordered by their sensor number.
     pub temperatures: Vec<Temperature>,
+    /// The fans of this device, ordered by their sensor number.
     pub fans:         Vec<Fan>,
 }
 

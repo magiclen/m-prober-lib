@@ -9,9 +9,11 @@ use crate::{
     utils::{parse_number, read_file, read_sysfs_number},
 };
 
+/// One physical CPU package, built from the `processor` blocks of the `/proc/cpuinfo` file that share a `physical id`.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
 pub struct CPU {
+    /// The `physical id` of this package. It is `0` on platforms that do not report one.
     pub physical_id: usize,
     /// The model name, which is empty on platforms that do not report it (e.g. ARM).
     pub model_name:  String,

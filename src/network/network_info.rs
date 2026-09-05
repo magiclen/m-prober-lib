@@ -8,6 +8,7 @@ use crate::{
     utils::{read_sysfs_number, read_sysfs_string},
 };
 
+/// The link information of a network interface, read from the `/sys/class/net` folder.
 #[derive(Default, Debug, Clone)]
 pub struct NetworkInfo {
     /// The operational state, e.g. `up`, `down` or `unknown`.

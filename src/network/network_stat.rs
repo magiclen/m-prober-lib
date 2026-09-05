@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// The rates computed between two `NetworkStat` instances.
 #[derive(Default, Debug, Clone)]
 pub struct NetworkSpeed {
     /// Bytes received per second.

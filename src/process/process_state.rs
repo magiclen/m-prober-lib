@@ -48,6 +48,7 @@ pub enum ProcessState {
 }
 
 impl ProcessState {
+    /// Parse the single-character state that the `/proc/PID/stat` file reports. It returns `None` for an unknown character.
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn from_str<S: AsRef<str>>(s: S) -> Option<ProcessState> {
@@ -69,6 +70,7 @@ impl ProcessState {
 }
 
 impl ProcessState {
+    /// Get the name of this state, e.g. `Sleeping`.
     #[inline]
     pub fn as_str(self) -> &'static str {
         match self {

@@ -5,6 +5,7 @@ use std::{
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
+/// The user and group IDs of a process, read from the `/proc/PID/status` file.
 #[derive(Default, Debug, Clone)]
 pub struct ProcessStatus {
     /// The user who created this process or the UID set via `setuid()` by the root caller.

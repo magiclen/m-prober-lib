@@ -9,15 +9,25 @@ use crate::{Error, cpu::CPUTime, scanner_rust::ScannerAscii};
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]
 pub struct CPUStat {
+    /// Time spent in user mode.
     pub user:       u64,
+    /// Time spent in user mode with a low priority.
     pub nice:       u64,
+    /// Time spent in kernel mode.
     pub system:     u64,
+    /// Time spent doing nothing.
     pub idle:       u64,
+    /// Time spent waiting for I/O to complete. It is not reliable, see `proc(5)`.
     pub iowait:     u64,
+    /// Time spent servicing hardware interrupts.
     pub irq:        u64,
+    /// Time spent servicing software interrupts.
     pub softirq:    u64,
+    /// Time stolen by other operating systems running in a virtualized environment.
     pub steal:      u64,
+    /// Time spent running a virtual CPU for a guest operating system.
     pub guest:      u64,
+    /// Time spent running a virtual CPU for a guest operating system with a low priority.
     pub guest_nice: u64,
 }
 

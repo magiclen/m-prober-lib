@@ -2,10 +2,14 @@ use std::io::{self, ErrorKind};
 
 use crate::{Error, scanner_rust::ScannerAscii, utils::parse_number};
 
+/// The load average read from the `/proc/loadavg` file.
 #[derive(Default, Debug, Clone)]
 pub struct LoadAverage {
+    /// The load average over the last minute.
     pub one:              f64,
+    /// The load average over the last five minutes.
     pub five:             f64,
+    /// The load average over the last fifteen minutes.
     pub fifteen:          f64,
     /// The number of currently runnable kernel scheduling entities (processes and threads).
     pub running_entities: u32,

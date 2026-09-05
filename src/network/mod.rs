@@ -14,9 +14,12 @@ pub use network_stat::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
+/// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]
 pub struct Network {
+    /// The name of the interface, e.g. `lo` or `eth0`.
     pub interface: String,
+    /// The counters of the interface.
     pub stat:      NetworkStat,
 }
 

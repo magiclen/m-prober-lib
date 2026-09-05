@@ -6,6 +6,7 @@ use crate::{
     utils::{uname, utsname_field_to_string},
 };
 
+/// The system-wide file handle usage read from the `/proc/sys/fs/file-nr` file.
 #[derive(Default, Debug, Clone)]
 pub struct FileNr {
     /// The number of allocated file handles.
@@ -40,6 +41,7 @@ pub fn get_file_nr() -> Result<FileNr, Error> {
     })
 }
 
+/// The fields that the `uname` function in libc reports.
 #[derive(Default, Debug, Clone)]
 pub struct Uname {
     /// The operating system name, e.g. `Linux`.

@@ -7,6 +7,7 @@ use chrono::prelude::*;
 
 use crate::{Error, scanner_rust::ScannerAscii};
 
+/// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]
 pub struct Uptime {
     /// The time since boot, including the time spent in suspend.

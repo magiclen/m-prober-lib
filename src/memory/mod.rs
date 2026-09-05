@@ -44,7 +44,9 @@ pub struct Swap {
 /// The memory and swap information that the `free` command shows.
 #[derive(Default, Debug, Clone)]
 pub struct Free {
+    /// The physical memory usage.
     pub mem:  Mem,
+    /// The swap usage.
     pub swap: Swap,
 }
 

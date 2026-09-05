@@ -14,9 +14,12 @@ use crate::{
     volume::{VolumeSpeed, VolumeStat, get_mounts},
 };
 
+/// One mounted block device. Two instances are equal when their device names are equal.
 #[derive(Debug, Clone, Eq)]
 pub struct Volume {
+    /// The device name as it appears in the `/proc/diskstats` file, e.g. `nvme0n1p1`.
     pub device:    String,
+    /// The I/O counters of the device.
     pub stat:      VolumeStat,
     /// The size of the file system in bytes.
     pub size:      u64,
@@ -24,6 +27,7 @@ pub struct Volume {
     pub used:      u64,
     /// The space available to unprivileged users in bytes.
     pub available: u64,
+    /// Every path this device is mounted at. The sizes above are those of the first one.
     pub points:    Vec<String>,
 }
 

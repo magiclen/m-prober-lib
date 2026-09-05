@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// The rates computed between two `VolumeStat` instances.
 #[derive(Default, Debug, Clone)]
 pub struct VolumeSpeed {
     /// Bytes read per second.

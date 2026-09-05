@@ -19,6 +19,7 @@ pub struct PressureStat {
     pub total:  Duration,
 }
 
+/// The PSI (Pressure Stall Information) of one resource.
 #[derive(Default, Debug, Clone)]
 pub struct Pressure {
     /// The time in which at least one task was stalled on the resource.
