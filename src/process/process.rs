@@ -15,14 +15,21 @@ use crate::{
     btime::get_btime,
     cpu::get_average_cpu_stat,
     process::{
-        ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_stat,
-        get_process_status, get_process_time_stat, process_stat::get_process_ppid,
+        ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_time_stat,
+        process_stat::{
+            get_process_ppid, get_process_stat_without_memory, read_process_statm_file,
+        },
+        process_status::read_process_status,
     },
     utils::clock_ticks_to_duration,
 };
 
+/// The names of the terminal devices that were already looked up in one scan. Every lookup is a `readlink` in sysfs, and a machine full of processes normally has only a handful of terminals.
+type TtyCache = BTreeMap<(u16, u32), Option<String>>;
+
 /// One running process. Two instances are equal when their PIDs are equal.
 #[derive(Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Process {
     /// The ID of this process.
     pub pid:                u32,
@@ -142,10 +149,12 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     process_path: P,
     process_filter: &ProcessFilter,
     btime: DateTime<Utc>,
+    tty_cache: &mut TtyCache,
 ) -> Result<ProcessProbe, Error> {
     let process_path = process_path.as_ref();
 
-    let status = get_process_status(pid)?;
+    // Only the IDs and the swap size are used here, and both come before the `Threads:` line.
+    let status = read_process_status(pid, true)?;
 
     let uid_filtered = process_filter.uid_filter.is_some_and(|uid_filter| {
         status.real_uid != uid_filter
@@ -175,7 +184,8 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
         .as_ref()
         .is_none_or(|program_filter| program_filter.is_match(&cmdline));
 
-    let mut stat = get_process_stat(pid)?;
+    // The memory fields live in a separate file, which a process that is dropped right here does not need.
+    let mut stat = get_process_stat_without_memory(pid)?;
 
     if !program_filter_match
         && let Some(program_filter) = process_filter.program_filter.as_ref()
@@ -190,7 +200,10 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let ppid = stat.ppid;
     let program = take(&mut stat.comm);
 
-    let tty = tty_name(stat.tty_nr_major, stat.tty_nr_minor);
+    let tty = tty_cache
+        .entry((stat.tty_nr_major, stat.tty_nr_minor))
+        .or_insert_with(|| tty_name(stat.tty_nr_major, stat.tty_nr_minor))
+        .clone();
 
     if let Some(tty_filter) = process_filter.tty_filter.as_ref() {
         match tty.as_ref() {
@@ -204,6 +217,9 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     }
 
     let exe = fs::read_link(process_path.join("exe")).ok();
+
+    // The process survived every filter, so the memory fields are worth the extra read now.
+    read_process_statm_file(pid, &mut stat)?;
 
     let priority = stat.priority;
     let real_time_priority = if stat.rt_priority > 0 { Some(stat.rt_priority) } else { None };
@@ -256,10 +272,78 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
 pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> {
     let process_path = Path::new("/proc").join(pid.to_string());
 
-    match get_process_with_stat_inner(pid, process_path, &ProcessFilter::default(), get_btime())? {
+    let mut tty_cache = TtyCache::new();
+
+    match get_process_with_stat_inner(
+        pid,
+        process_path,
+        &ProcessFilter::default(),
+        get_btime(),
+        &mut tty_cache,
+    )? {
         ProcessProbe::Matched(process, stat) => Ok((process, stat)),
         ProcessProbe::Filtered(_) => unreachable!("the default filter matches every process"),
     }
+}
+
+/// Get the current working directory of a specific process found by ID by reading the `/proc/PID/cwd` link. Reading the link of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned, and a kernel thread has none, so a `NotFound` error is returned for one.
+///
+/// ```rust
+/// use mprober_lib::process;
+///
+/// let cwd = process::get_process_cwd(std::process::id()).unwrap();
+///
+/// println!("{}", cwd.display());
+/// ```
+#[inline]
+pub fn get_process_cwd(pid: u32) -> Result<PathBuf, Error> {
+    Ok(fs::read_link(Path::new("/proc").join(pid.to_string()).join("cwd"))?)
+}
+
+/// Get the root directory of a specific process found by ID by reading the `/proc/PID/root` link. It is `/` unless the process was put into a `chroot` or a mount namespace of its own. Reading the link of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
+///
+/// ```rust
+/// use mprober_lib::process;
+///
+/// let root = process::get_process_root(std::process::id()).unwrap();
+///
+/// println!("{}", root.display());
+/// ```
+#[inline]
+pub fn get_process_root(pid: u32) -> Result<PathBuf, Error> {
+    Ok(fs::read_link(Path::new("/proc").join(pid.to_string()).join("root"))?)
+}
+
+/// Get the environment variables of a specific process found by ID by reading the `/proc/PID/environ` file. The kernel returns the environment the process was started with, so a variable the process changed afterwards is not reflected. Reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned, and a kernel thread has no environment, so the result is empty for one.
+///
+/// ```rust
+/// use mprober_lib::process;
+///
+/// let environ = process::get_process_environ(std::process::id()).unwrap();
+///
+/// for (name, value) in environ {
+///     println!("{name}={value}");
+/// }
+/// ```
+pub fn get_process_environ(pid: u32) -> Result<Vec<(String, String)>, Error> {
+    let data = fs::read(Path::new("/proc").join(pid.to_string()).join("environ"))?;
+
+    let mut environ = Vec::with_capacity(16);
+
+    // Every entry ends with a NUL, so the split produces one trailing empty slice.
+    for entry in data.split(|&b| b == 0) {
+        let Some(equal_index) = entry.iter().position(|&b| b == b'=') else {
+            continue;
+        };
+
+        // An environment variable is arbitrary bytes, so it may not be valid UTF-8.
+        environ.push((
+            String::from_utf8_lossy(&entry[..equal_index]).into_owned(),
+            String::from_utf8_lossy(&entry[(equal_index + 1)..]).into_owned(),
+        ));
+    }
+
+    Ok(environ)
 }
 
 /// Check whether `pid` is `ancestor` itself or one of its descendants by walking up the parent chain.
@@ -303,6 +387,8 @@ pub fn get_processes_with_stat(
     // The boot time is computed once, so every process in this scan uses the same value.
     let btime = get_btime();
 
+    let mut tty_cache = TtyCache::new();
+
     for dir_entry in Path::new("/proc").read_dir()? {
         let dir_entry = dir_entry?;
 
@@ -310,7 +396,13 @@ pub fn get_processes_with_stat(
             continue;
         };
 
-        match get_process_with_stat_inner(pid, dir_entry.path(), process_filter, btime) {
+        match get_process_with_stat_inner(
+            pid,
+            dir_entry.path(),
+            process_filter,
+            btime,
+            &mut tty_cache,
+        ) {
             Ok(ProcessProbe::Matched(process, stat)) => {
                 if process_filter.pid_filter.is_some() {
                     pid_ppid_map.insert(pid, process.ppid);

@@ -13,6 +13,7 @@ use crate::{
 
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessStat {
     /// The state of the process.
     pub state:        ProcessState,
@@ -105,7 +106,7 @@ pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, Error> {
     Ok(sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
 }
 
-fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
+pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
     let (comm, fields) = split_process_stat_line(line)?;
 
     let mut stat = ProcessStat {
@@ -196,10 +197,23 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
 /// println!("{process_stat:#?}");
 /// ```
 pub fn get_process_stat(pid: u32) -> Result<ProcessStat, Error> {
+    let mut stat = get_process_stat_without_memory(pid)?;
+
+    read_process_statm_file(pid, &mut stat)?;
+
+    Ok(stat)
+}
+
+/// Get the stat of a process without the memory fields, which live in a separate file. A caller that may drop the process right away saves one `open` and one `read` this way.
+#[inline]
+pub(crate) fn get_process_stat_without_memory(pid: u32) -> Result<ProcessStat, Error> {
     let line = read_process_stat_file(pid)?;
 
-    let mut stat = parse_process_stat(&line)?;
+    parse_process_stat(&line)
+}
 
+/// Fill the memory fields of a stat by reading the `/proc/PID/statm` file. They come from there instead of from the `stat` file, so that `rss` and `shared` are consistent with each other.
+pub(crate) fn read_process_statm_file(pid: u32, stat: &mut ProcessStat) -> Result<(), Error> {
     let statm_path = Path::new("/proc").join(pid.to_string()).join("statm");
 
     // The file is seven small numbers, so it always fits into one read.
@@ -216,7 +230,7 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, Error> {
 
     stat.rss_anon = stat.rss.saturating_sub(stat.shared);
 
-    Ok(stat)
+    Ok(())
 }
 
 #[cfg(test)]

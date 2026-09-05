@@ -7,6 +7,7 @@ use crate::{Error, scanner_rust::ScannerU8SliceAscii, utils::read_single_record_
 
 /// Fields read from the `/proc/PID/status` file. Memory fields are in bytes.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessStatus {
     /// The real UID, which is the UID of the user who started the process.
     pub real_uid:                   u32,
@@ -34,12 +35,17 @@ pub struct ProcessStatus {
     pub nonvoluntary_ctxt_switches: u64,
 }
 
-fn parse_process_status(data: &[u8]) -> Result<ProcessStatus, Error> {
+/// Parse the content of a `/proc/PID/status` file. When `stop_at_threads` is set, the parsing ends at the `Threads:` line, which the kernel writes after every field except the context switch counters, so a caller that does not need those reads only about half of the file.
+fn parse_process_status(data: &[u8], stop_at_threads: bool) -> Result<ProcessStatus, Error> {
     let mut status = ProcessStatus::default();
 
     let mut sc = ScannerU8SliceAscii::new(data);
 
     while let Some(label) = sc.next()? {
+        if stop_at_threads && label == b"Threads:" {
+            break;
+        }
+
         match label {
             b"Uid:" => {
                 status.real_uid =
@@ -94,12 +100,17 @@ fn parse_process_status(data: &[u8]) -> Result<ProcessStatus, Error> {
 /// println!("{process_status:#?}");
 /// ```
 pub fn get_process_status(pid: u32) -> Result<ProcessStatus, Error> {
+    read_process_status(pid, false)
+}
+
+/// Read a `/proc/PID/status` file. The context switch counters are the last two lines of the file, so a caller that does not need them can skip the second half of the parsing.
+pub(crate) fn read_process_status(pid: u32, stop_at_threads: bool) -> Result<ProcessStatus, Error> {
     let status_path = Path::new("/proc").join(pid.to_string()).join("status");
 
     // The kernel generates the whole file at once and it is about 1.5 KB, so one read normally gets everything.
     let data = read_single_record_file(status_path, 2048)?;
 
-    parse_process_status(&data)
+    parse_process_status(&data, stop_at_threads)
 }
 
 #[cfg(test)]
@@ -128,7 +139,7 @@ nonvoluntary_ctxt_switches:\t3
 
     #[test]
     fn parse_status() {
-        let status = parse_process_status(STATUS).unwrap();
+        let status = parse_process_status(STATUS, false).unwrap();
 
         assert_eq!(1000, status.real_uid);
         assert_eq!(1001, status.effective_uid);
@@ -142,5 +153,19 @@ nonvoluntary_ctxt_switches:\t3
         assert_eq!(128 * 1024, status.vm_swap);
         assert_eq!(12, status.voluntary_ctxt_switches);
         assert_eq!(3, status.nonvoluntary_ctxt_switches);
+    }
+
+    #[test]
+    fn parse_status_stopping_at_threads() {
+        let status = parse_process_status(STATUS, true).unwrap();
+
+        // Everything a process scan needs comes before the `Threads:` line.
+        assert_eq!(1000, status.real_uid);
+        assert_eq!(2001, status.effective_gid);
+        assert_eq!(128 * 1024, status.vm_swap);
+
+        // The context switch counters are the last two lines, so they are not read.
+        assert_eq!(0, status.voluntary_ctxt_switches);
+        assert_eq!(0, status.nonvoluntary_ctxt_switches);
     }
 }
