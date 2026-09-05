@@ -7,7 +7,7 @@ use std::{
 use crate::{
     Error,
     process::ProcessState,
-    scanner_rust::{Scanner, ScannerU8SliceAscii},
+    scanner_rust::ScannerU8SliceAscii,
     utils::{page_size, read_single_record_file},
 };
 
@@ -184,7 +184,10 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, Error> {
 
     let statm_path = Path::new("/proc").join(pid.to_string()).join("statm");
 
-    let mut sc: Scanner<_, 32> = Scanner::scan_path2(statm_path)?;
+    // The file is seven small numbers, so it always fits into one read.
+    let statm = read_single_record_file(statm_path, 64)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&statm);
 
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
