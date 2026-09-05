@@ -48,28 +48,6 @@ pub enum ProcessState {
 }
 
 impl ProcessState {
-    /// Parse the single-character state that the `/proc/PID/stat` file reports. It returns `None` for an unknown character.
-    #[allow(clippy::should_implement_trait)]
-    #[inline]
-    pub fn from_str<S: AsRef<str>>(s: S) -> Option<ProcessState> {
-        match s.as_ref() {
-            "R" => Some(ProcessState::Running),
-            "S" => Some(ProcessState::Sleeping),
-            "D" => Some(ProcessState::Waiting),
-            "Z" => Some(ProcessState::Zombie),
-            "T" => Some(ProcessState::Stopped),
-            "t" => Some(ProcessState::TracingStop),
-            "W" => Some(ProcessState::PagingOrWaking),
-            "X" | "x" => Some(ProcessState::Dead),
-            "K" => Some(ProcessState::Wakekill),
-            "P" => Some(ProcessState::Parked),
-            "I" => Some(ProcessState::Idle),
-            _ => None,
-        }
-    }
-}
-
-impl ProcessState {
     /// Get the name of this state, e.g. `Sleeping`.
     #[inline]
     pub fn as_str(self) -> &'static str {
@@ -100,8 +78,22 @@ impl Display for ProcessState {
 impl FromStr for ProcessState {
     type Err = ParseProcessStateError;
 
+    /// Parse the single-character state that the `/proc/PID/stat` file reports.
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ProcessState::from_str(s).ok_or(ParseProcessStateError)
+        match s {
+            "R" => Ok(ProcessState::Running),
+            "S" => Ok(ProcessState::Sleeping),
+            "D" => Ok(ProcessState::Waiting),
+            "Z" => Ok(ProcessState::Zombie),
+            "T" => Ok(ProcessState::Stopped),
+            "t" => Ok(ProcessState::TracingStop),
+            "W" => Ok(ProcessState::PagingOrWaking),
+            "X" | "x" => Ok(ProcessState::Dead),
+            "K" => Ok(ProcessState::Wakekill),
+            "P" => Ok(ProcessState::Parked),
+            "I" => Ok(ProcessState::Idle),
+            _ => Err(ParseProcessStateError),
+        }
     }
 }

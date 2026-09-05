@@ -111,10 +111,9 @@ fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
 
     let state = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-    stat.state = from_utf8(state)
-        .ok()
-        .and_then(ProcessState::from_str)
-        .ok_or(io::Error::from(ErrorKind::InvalidData))?;
+    // A state letter this crate does not know is not an error, because the kernel has added new letters over time.
+    stat.state =
+        from_utf8(state).ok().and_then(|s| s.parse().ok()).unwrap_or(ProcessState::Unknown);
 
     stat.ppid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     stat.pgrp = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -229,5 +228,18 @@ pub(crate) mod tests {
         assert_eq!(u64::MAX, stat.rsslim);
         assert_eq!(2, stat.processor);
         assert_eq!(0, stat.rt_priority);
+    }
+
+    #[test]
+    fn parse_unknown_state() {
+        let mut line = STAT_LINE.to_vec();
+
+        let index = line.windows(3).position(|w| w == b") S").unwrap() + 2;
+        line[index] = b'Q';
+
+        let stat = parse_process_stat(&line).unwrap();
+
+        assert_eq!(ProcessState::Unknown, stat.state);
+        assert_eq!(1, stat.ppid);
     }
 }
