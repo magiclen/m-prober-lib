@@ -34,8 +34,10 @@ impl ProcessTimeStat {
     ///     let pre_average_cpu_time = pre_average_cpu_stat.compute_cpu_time();
     ///     let average_cpu_time = average_cpu_stat.compute_cpu_time();
     ///
-    ///     (average_cpu_time.get_total_time()
-    ///         - pre_average_cpu_time.get_total_time()) as f64
+    ///     average_cpu_time
+    ///         .get_total_time()
+    ///         .saturating_sub(pre_average_cpu_time.get_total_time())
+    ///         as f64
     /// };
     ///
     /// let cpu_percentage = pre_process_time_stat
@@ -52,8 +54,9 @@ impl ProcessTimeStat {
         process_time_stat_after_this: &ProcessTimeStat,
         total_cpu_time: f64,
     ) -> f64 {
-        let d_utime = process_time_stat_after_this.utime - self.utime;
-        let d_stime = process_time_stat_after_this.stime - self.stime;
+        // The PID may have been reused by a new process, so the counters can go backwards.
+        let d_utime = process_time_stat_after_this.utime.saturating_sub(self.utime);
+        let d_stime = process_time_stat_after_this.stime.saturating_sub(self.stime);
         let d_time_f64 = (d_utime + d_stime) as f64;
 
         if total_cpu_time < 1.0 {

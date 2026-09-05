@@ -69,8 +69,12 @@ impl CPUStat {
         let pre_cpu_time = self.compute_cpu_time();
         let cpu_time = cpu_stat_after_this.compute_cpu_time();
 
-        let d_total = cpu_time.get_total_time() - pre_cpu_time.get_total_time();
-        let d_non_idle = cpu_time.non_idle - pre_cpu_time.non_idle;
+        let d_total = cpu_time.get_total_time().saturating_sub(pre_cpu_time.get_total_time());
+        let d_non_idle = cpu_time.non_idle.saturating_sub(pre_cpu_time.non_idle);
+
+        if d_total == 0 {
+            return 0.0;
+        }
 
         d_non_idle as f64 / d_total as f64
     }

@@ -43,8 +43,8 @@ impl NetworkStat {
         interval: Duration,
     ) -> NetworkSpeed {
         let seconds = interval.as_secs_f64();
-        let d_receive = network_stat_after_this.receive_bytes - self.receive_bytes;
-        let d_transmit = network_stat_after_this.transmit_bytes - self.transmit_bytes;
+        let d_receive = network_stat_after_this.receive_bytes.saturating_sub(self.receive_bytes);
+        let d_transmit = network_stat_after_this.transmit_bytes.saturating_sub(self.transmit_bytes);
 
         let receive = d_receive as f64 / seconds;
         let transmit = d_transmit as f64 / seconds;

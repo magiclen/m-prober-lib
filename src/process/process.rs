@@ -335,7 +335,8 @@ pub fn get_processes_with_cpu_utilization_in_percentage(
         let pre_average_cpu_time = pre_average_cpu_stat.compute_cpu_time();
         let average_cpu_time = average_cpu_stat.compute_cpu_time();
 
-        (average_cpu_time.get_total_time() - pre_average_cpu_time.get_total_time()) as f64
+        average_cpu_time.get_total_time().saturating_sub(pre_average_cpu_time.get_total_time())
+            as f64
     };
 
     for (process, pre_process_stat) in processes_with_stat {

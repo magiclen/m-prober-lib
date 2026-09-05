@@ -159,7 +159,7 @@ pub fn get_process_stat(pid: u32) -> Result<ProcessStat, ScannerError> {
     stat.shared =
         sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * get_page_size();
 
-    stat.rss_anon = stat.rss - stat.shared;
+    stat.rss_anon = stat.rss.saturating_sub(stat.shared);
 
     Ok(stat)
 }

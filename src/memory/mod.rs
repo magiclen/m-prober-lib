@@ -87,11 +87,11 @@ pub fn free() -> Result<Free, ScannerError> {
     let slab = item_values[9];
     let s_unreclaim = item_values[10];
 
-    let total_cached = cached + slab - s_unreclaim;
+    let total_cached = (cached + slab).saturating_sub(s_unreclaim);
 
     let mem = Mem {
         total,
-        used: total - free - buffers - total_cached,
+        used: total.saturating_sub(free).saturating_sub(buffers).saturating_sub(total_cached),
         free,
         shared: shmem,
         buffers,
@@ -101,7 +101,7 @@ pub fn free() -> Result<Free, ScannerError> {
 
     let swap = Swap {
         total: swap_total,
-        used:  swap_total - swap_free - swap_cached,
+        used:  swap_total.saturating_sub(swap_free).saturating_sub(swap_cached),
         free:  swap_free,
         cache: swap_cached,
     };

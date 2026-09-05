@@ -43,8 +43,8 @@ impl VolumeStat {
         interval: Duration,
     ) -> VolumeSpeed {
         let seconds = interval.as_secs_f64();
-        let d_read = volume_stat_after_this.read_bytes - self.read_bytes;
-        let d_write = volume_stat_after_this.write_bytes - self.write_bytes;
+        let d_read = volume_stat_after_this.read_bytes.saturating_sub(self.read_bytes);
+        let d_write = volume_stat_after_this.write_bytes.saturating_sub(self.write_bytes);
 
         let read = d_read as f64 / seconds;
         let write = d_write as f64 / seconds;
