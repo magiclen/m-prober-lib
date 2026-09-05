@@ -84,6 +84,8 @@ pub mod pressure;
 pub mod process;
 /// The datetime of the hardware real time clock.
 pub mod rtc_time;
+/// The identity of the machine, and whether it is virtualized.
+pub mod system;
 /// The time since the system booted.
 pub mod uptime;
 /// Mounted block devices, their sizes and their I/O counters.
