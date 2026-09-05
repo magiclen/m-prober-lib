@@ -2,14 +2,27 @@ use std::time::Duration;
 
 #[derive(Default, Debug, Clone)]
 pub struct NetworkSpeed {
-    pub receive:  f64,
-    pub transmit: f64,
+    /// Bytes received per second.
+    pub receive:          f64,
+    /// Bytes transmitted per second.
+    pub transmit:         f64,
+    /// Packets received per second.
+    pub receive_packets:  f64,
+    /// Packets transmitted per second.
+    pub transmit_packets: f64,
 }
 
+/// Counters read from the `/proc/net/dev` file.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct NetworkStat {
-    pub receive_bytes:  u64,
-    pub transmit_bytes: u64,
+    pub receive_bytes:    u64,
+    pub receive_packets:  u64,
+    pub receive_errors:   u64,
+    pub receive_dropped:  u64,
+    pub transmit_bytes:   u64,
+    pub transmit_packets: u64,
+    pub transmit_errors:  u64,
+    pub transmit_dropped: u64,
 }
 
 impl NetworkStat {
@@ -43,15 +56,19 @@ impl NetworkStat {
         interval: Duration,
     ) -> NetworkSpeed {
         let seconds = interval.as_secs_f64();
+
         let d_receive = network_stat_after_this.receive_bytes.saturating_sub(self.receive_bytes);
         let d_transmit = network_stat_after_this.transmit_bytes.saturating_sub(self.transmit_bytes);
-
-        let receive = d_receive as f64 / seconds;
-        let transmit = d_transmit as f64 / seconds;
+        let d_receive_packets =
+            network_stat_after_this.receive_packets.saturating_sub(self.receive_packets);
+        let d_transmit_packets =
+            network_stat_after_this.transmit_packets.saturating_sub(self.transmit_packets);
 
         NetworkSpeed {
-            receive,
-            transmit,
+            receive:          d_receive as f64 / seconds,
+            transmit:         d_transmit as f64 / seconds,
+            receive_packets:  d_receive_packets as f64 / seconds,
+            transmit_packets: d_transmit_packets as f64 / seconds,
         }
     }
 }

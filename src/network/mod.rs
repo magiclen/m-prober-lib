@@ -63,16 +63,29 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
         let interface = unsafe { String::from_utf8_unchecked(interface) };
 
         let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        for _ in 0..7 {
+        // fifo, frame, compressed, multicast
+        for _ in 0..4 {
             sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         }
 
         let transmit_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         let stat = NetworkStat {
             receive_bytes,
+            receive_packets,
+            receive_errors,
+            receive_dropped,
             transmit_bytes,
+            transmit_packets,
+            transmit_errors,
+            transmit_dropped,
         };
 
         let network = Network {
