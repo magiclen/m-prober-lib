@@ -75,8 +75,16 @@ pub(crate) fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
 
     let mut mounts: HashMap<String, Mount> = HashMap::with_capacity(entries.len());
 
+    // Every lookup costs a `stat` and a `readlink`, so a device that is mounted more than once (two btrfs subvolumes, a bind mount) is resolved only for its first mount.
+    let mut resolved: HashMap<String, String> = HashMap::with_capacity(entries.len());
+
     for (device_path, point, fs_type) in entries {
-        let mount = mounts.entry(resolve_device_name(&device_path)).or_default();
+        let device = resolved
+            .entry(device_path)
+            .or_insert_with_key(|path| resolve_device_name(path))
+            .clone();
+
+        let mount = mounts.entry(device).or_default();
 
         if mount.points.is_empty() {
             mount.fs_type = fs_type;

@@ -107,19 +107,28 @@ pub(crate) type Package = (Vec<usize>, BTreeSet<usize>);
 
 /// Group the online logical processors by their physical package, using sysfs. It returns `None` when sysfs reports no topology at all.
 pub(crate) fn package_topology() -> Option<BTreeMap<usize, Package>> {
-    let topologies = get_all_cpu_topologies().ok()?;
-
-    if topologies.is_empty() {
-        return None;
-    }
+    let cpus = get_online_cpus().ok()?;
 
     let mut packages: BTreeMap<usize, Package> = BTreeMap::new();
 
-    for topology in topologies {
-        let package = packages.entry(topology.physical_package_id).or_default();
+    for cpu in cpus {
+        let path = Path::new("/sys/devices/system/cpu").join(format!("cpu{cpu}/topology"));
 
-        package.0.push(topology.cpu);
-        package.1.insert(topology.core_id);
+        // A package is made of these two attributes alone, so the four other files of the folder are left unread. A processor that reports no package (it can go offline while the folder is being scanned, and a virtual machine may expose no topology at all) is skipped, like in `get_all_cpu_topologies`.
+        let Some(physical_package_id) = read_optional_id(path.join("physical_package_id")) else {
+            continue;
+        };
+
+        let core_id = read_optional_id(path.join("core_id")).unwrap_or(0);
+
+        let package = packages.entry(physical_package_id).or_default();
+
+        package.0.push(cpu);
+        package.1.insert(core_id);
+    }
+
+    if packages.is_empty() {
+        return None;
     }
 
     Some(packages)

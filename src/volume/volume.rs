@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     ffi::CString,
     hash::{Hash, Hasher},
     mem::zeroed,
@@ -12,7 +11,9 @@ use scanner_rust::ScannerU8SliceAscii;
 use crate::{
     Error,
     utils::{OrEof, read_file},
-    volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, mounts::get_mounts},
+    volume::{
+        VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, get_disk_stats, mounts::get_mounts,
+    },
 };
 
 /// One mounted block device. Two instances are equal when their device names are equal.
@@ -98,7 +99,7 @@ fn statvfs(point: &str) -> Option<FsUsage> {
 
 /// Get volume information by reading the `/proc/diskstats` file and using the `statvfs` function in libc. A mounted device whose mount point cannot be reached is skipped.
 ///
-/// `statvfs` has no timeout, so this blocks for as long as the file system takes to answer. A network mount whose server is unreachable can therefore make this never return, which is not the same as the skipped case above.
+/// `statvfs` has no timeout, so this blocks for as long as the file system takes to answer. Only the mounts whose source is a `/dev/` node are listed here, so a plain network file system (NFS, CIFS) never reaches it, but a network *block* device (iSCSI, nbd, drbd) does, and one whose server is unreachable can make this never return, which is not the same as the skipped case above.
 ///
 /// ```rust
 /// use mprober_lib::volume;
@@ -176,25 +177,18 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
 /// }
 /// ```
 pub fn get_volumes_with_speed(interval: Duration) -> Result<Vec<(Volume, VolumeSpeed)>, Error> {
-    let pre_volumes = get_volumes()?;
-
-    let pre_volumes_length = pre_volumes.len();
-
-    let mut pre_volumes_hashset = HashSet::with_capacity(pre_volumes_length);
-
-    for pre_volume in pre_volumes {
-        pre_volumes_hashset.insert(pre_volume);
-    }
+    // Only the counters of `/proc/diskstats` are needed for the first sample, so the mount table and the `statvfs` call of every volume are done once instead of twice. That halves the work and, more importantly, leaves only one call that can block on an unresponsive device.
+    let pre_disk_stats = get_disk_stats()?;
 
     sleep(interval);
 
     let volumes = get_volumes()?;
 
-    let mut volumes_with_speed = Vec::with_capacity(volumes.len().min(pre_volumes_length));
+    let mut volumes_with_speed = Vec::with_capacity(volumes.len().min(pre_disk_stats.len()));
 
     for volume in volumes {
-        if let Some(pre_volume) = pre_volumes_hashset.get(&volume) {
-            let volume_speed = pre_volume.stat.compute_speed(&volume.stat, interval);
+        if let Some(pre_stat) = pre_disk_stats.get(&volume.device) {
+            let volume_speed = pre_stat.compute_speed(&volume.stat, interval);
 
             volumes_with_speed.push((volume, volume_speed));
         }
