@@ -1,7 +1,15 @@
+mod mem_info;
+mod numa;
+mod swap_device;
+mod vm_stat;
 
 use std::io::{self, ErrorKind};
 
+pub use mem_info::*;
+pub use numa::*;
 use scanner_rust::ScannerU8SliceAscii;
+pub use swap_device::*;
+pub use vm_stat::*;
 
 use crate::{Error, utils::read_single_record_file};
 
