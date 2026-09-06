@@ -403,6 +403,8 @@ pub fn get_processes_with_stat(
 
 /// Get process information by reading files in the `/proc/PID` folders and measure the cpu utilization in percentage within a specific time interval. If the number it returns is `1.0`, means `100%`.
 ///
+/// The CPU time of the whole system is sampled before the scan of the processes starts, while the time of each process is sampled during it, so the denominator covers a slightly longer span than the numerator and the result comes out a little low. The error is roughly half the scan time divided by the interval, so an interval well above the time [`get_processes_with_stat`] takes keeps it small.
+///
 /// ```rust
 /// use std::{thread::sleep, time::Duration};
 ///

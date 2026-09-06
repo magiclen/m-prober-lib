@@ -20,7 +20,7 @@ use std::fmt::{self, Debug, Formatter};
 /// ```
 #[derive(Default, Clone)]
 pub struct ProcessFilter<'a> {
-    /// Keep only this process and its descendants.
+    /// Keep only this process and its descendants. A descendant is found by walking up the chain of parents, so one whose ancestor could not be read is left out, which happens when `/proc` is mounted with `hidepid` or when the ancestor exits during the scan.
     pub pid_filter:     Option<u32>,
     /// Keep a process only when any of its four user IDs is this one.
     pub uid_filter:     Option<u32>,

@@ -92,7 +92,7 @@ pub(crate) fn parse_cpu_list(list: &str) -> Vec<usize> {
     cpus
 }
 
-/// Read a small sysfs file and return its content without the trailing whitespace.
+/// Read a small file that holds a single value, e.g. a sysfs attribute, a `/proc/sys` knob or `/etc/machine-id`, and return its content without the trailing whitespace.
 #[inline]
 pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let data = read_single_record_file(path, 64)?;
@@ -100,7 +100,7 @@ pub(crate) fn read_sysfs_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(String::from_utf8_lossy(data.trim_ascii_end()).into_owned())
 }
 
-/// Read a small sysfs file and parse its content as a number.
+/// Read a small file that holds a single value and parse its content as a number.
 #[inline]
 pub(crate) fn read_sysfs_number<T: FromStr, P: AsRef<Path>>(path: P) -> Result<T, Error>
 where
