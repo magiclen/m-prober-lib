@@ -1,7 +1,8 @@
 use std::{
+    collections::BTreeMap,
     fs,
-    io::ErrorKind,
-    path::{Path, PathBuf},
+    io::{self, ErrorKind},
+    path::Path,
 };
 
 use crate::{
@@ -107,20 +108,50 @@ pub struct HwmonDevice {
     pub humidities:   Vec<Humidity>,
 }
 
-/// Extract `N` from a file name like `tempN_input`.
-#[inline]
-fn parse_sensor_index(file_name: &str, kind: &str, suffix: &str) -> Option<usize> {
-    file_name.strip_prefix(kind)?.strip_suffix(suffix)?.parse().ok()
+// Which files a sensor has, taken from the folder listing so that an attribute the driver does not provide costs no `open` at all. The kinds do not use the same set of suffixes, so a flag that is meaningless for a kind is simply never set for it.
+const HAS_INPUT: u8 = 1 << 0;
+const HAS_AVERAGE: u8 = 1 << 1;
+const HAS_LABEL: u8 = 1 << 2;
+const HAS_MIN: u8 = 1 << 3;
+const HAS_MAX: u8 = 1 << 4;
+const HAS_CRIT: u8 = 1 << 5;
+const HAS_CAP: u8 = 1 << 6;
+
+/// Split a sensor file name like `temp1_input` into its kind, its index and its suffix. A file that is not named this way (e.g. `name` or `update_interval`) returns `None`.
+fn split_sensor_file_name(file_name: &str) -> Option<(&str, usize, &str)> {
+    let (name, suffix) = file_name.split_at(file_name.find('_')?);
+
+    let (kind, index) = name.split_at(name.find(|c: char| c.is_ascii_digit())?);
+
+    Some((kind, index.parse().ok()?, suffix))
 }
 
+/// Map a file name suffix to its flag. A suffix this crate does not read (e.g. `_alarm` or `_crit_alarm`) returns `None`.
+#[inline]
+fn suffix_flag(suffix: &str) -> Option<u8> {
+    let flag = match suffix {
+        "_input" => HAS_INPUT,
+        "_average" => HAS_AVERAGE,
+        "_label" => HAS_LABEL,
+        "_min" => HAS_MIN,
+        "_max" => HAS_MAX,
+        "_crit" => HAS_CRIT,
+        "_cap" => HAS_CAP,
+        _ => return None,
+    };
+
+    Some(flag)
+}
+
+/// The sensors of one device with the files each of them has. A `BTreeMap` keeps them in the order of their index, which the folder listing does not have.
 #[derive(Default)]
 struct SensorIndices {
-    temperatures: Vec<usize>,
-    fans:         Vec<usize>,
-    voltages:     Vec<usize>,
-    powers:       Vec<usize>,
-    currents:     Vec<usize>,
-    humidities:   Vec<usize>,
+    temperatures: BTreeMap<usize, u8>,
+    fans:         BTreeMap<usize, u8>,
+    voltages:     BTreeMap<usize, u8>,
+    powers:       BTreeMap<usize, u8>,
+    currents:     BTreeMap<usize, u8>,
+    humidities:   BTreeMap<usize, u8>,
 }
 
 fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
@@ -138,35 +169,38 @@ fn scan_sensor_indices(device_path: &Path) -> Option<SensorIndices> {
             continue;
         };
 
-        if let Some(index) = parse_sensor_index(file_name, "temp", "_input") {
-            indices.temperatures.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "fan", "_input") {
-            indices.fans.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "curr", "_input") {
-            indices.currents.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "humidity", "_input") {
-            indices.humidities.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "in", "_input") {
-            indices.voltages.push(index);
-        } else if let Some(index) = parse_sensor_index(file_name, "power", "_input")
-            .or_else(|| parse_sensor_index(file_name, "power", "_average"))
-        {
-            indices.powers.push(index);
-        }
+        let Some((kind, index, suffix)) = split_sensor_file_name(file_name) else {
+            continue;
+        };
+
+        let Some(flag) = suffix_flag(suffix) else {
+            continue;
+        };
+
+        let sensors = match kind {
+            "temp" => &mut indices.temperatures,
+            "fan" => &mut indices.fans,
+            "in" => &mut indices.voltages,
+            "power" => &mut indices.powers,
+            "curr" => &mut indices.currents,
+            "humidity" => &mut indices.humidities,
+            _ => continue,
+        };
+
+        *sensors.entry(index).or_default() |= flag;
     }
 
-    // The directory order is arbitrary, so the sensors are sorted by their index.
-    indices.temperatures.sort_unstable();
-    indices.fans.sort_unstable();
-    indices.voltages.sort_unstable();
-    indices.powers.sort_unstable();
-    indices.currents.sort_unstable();
-    indices.humidities.sort_unstable();
-
-    // A power sensor may have both an `_input` file and an `_average` file.
-    indices.powers.dedup();
-
     Some(indices)
+}
+
+/// Read an attribute only when the folder listing showed that it exists.
+#[inline]
+fn read_present<T, F: FnOnce() -> Option<T>>(flags: u8, flag: u8, read: F) -> Option<T> {
+    if flags & flag == 0 {
+        return None;
+    }
+
+    read()
 }
 
 fn read_device(device_path: &Path) -> Option<HwmonDevice> {
@@ -179,92 +213,131 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
 
     let mut temperatures = Vec::with_capacity(indices.temperatures.len());
 
-    for index in indices.temperatures {
+    for (index, flags) in indices.temperatures {
         // A sensor whose input cannot be read (e.g. `ENODATA`) is skipped.
-        let Some(current) = read_sysfs_milli(device_path.join(format!("temp{index}_input"))) else {
+        let Some(current) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_milli(device_path.join(format!("temp{index}_input")))
+        }) else {
             continue;
         };
 
         temperatures.push(Temperature {
-            label: read_sysfs_string(device_path.join(format!("temp{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("temp{index}_label"))).ok()
+            }),
             current,
-            max: read_sysfs_milli(device_path.join(format!("temp{index}_max"))),
-            critical: read_sysfs_milli(device_path.join(format!("temp{index}_crit"))),
+            max: read_present(flags, HAS_MAX, || {
+                read_sysfs_milli(device_path.join(format!("temp{index}_max")))
+            }),
+            critical: read_present(flags, HAS_CRIT, || {
+                read_sysfs_milli(device_path.join(format!("temp{index}_crit")))
+            }),
         });
     }
 
     let mut fans = Vec::with_capacity(indices.fans.len());
 
-    for index in indices.fans {
-        let Ok(rpm) = read_sysfs_number::<u32, _>(device_path.join(format!("fan{index}_input")))
-        else {
+    for (index, flags) in indices.fans {
+        let Some(rpm) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_number::<u32, _>(device_path.join(format!("fan{index}_input"))).ok()
+        }) else {
             continue;
         };
 
         fans.push(Fan {
-            label: read_sysfs_string(device_path.join(format!("fan{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("fan{index}_label"))).ok()
+            }),
             rpm,
         });
     }
 
     let mut voltages = Vec::with_capacity(indices.voltages.len());
 
-    for index in indices.voltages {
-        let Some(current) = read_sysfs_milli(device_path.join(format!("in{index}_input"))) else {
+    for (index, flags) in indices.voltages {
+        let Some(current) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_milli(device_path.join(format!("in{index}_input")))
+        }) else {
             continue;
         };
 
         voltages.push(Voltage {
-            label: read_sysfs_string(device_path.join(format!("in{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("in{index}_label"))).ok()
+            }),
             current,
-            min: read_sysfs_milli(device_path.join(format!("in{index}_min"))),
-            max: read_sysfs_milli(device_path.join(format!("in{index}_max"))),
+            min: read_present(flags, HAS_MIN, || {
+                read_sysfs_milli(device_path.join(format!("in{index}_min")))
+            }),
+            max: read_present(flags, HAS_MAX, || {
+                read_sysfs_milli(device_path.join(format!("in{index}_max")))
+            }),
         });
     }
 
     let mut powers = Vec::with_capacity(indices.powers.len());
 
-    for index in indices.powers {
-        let Some(current) = read_sysfs_micro(device_path.join(format!("power{index}_input")))
-            .or_else(|| read_sysfs_micro(device_path.join(format!("power{index}_average"))))
-        else {
+    for (index, flags) in indices.powers {
+        let Some(current) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_micro(device_path.join(format!("power{index}_input")))
+        })
+        .or_else(|| {
+            read_present(flags, HAS_AVERAGE, || {
+                read_sysfs_micro(device_path.join(format!("power{index}_average")))
+            })
+        }) else {
             continue;
         };
 
         powers.push(Power {
-            label: read_sysfs_string(device_path.join(format!("power{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("power{index}_label"))).ok()
+            }),
             current,
-            cap: read_sysfs_micro(device_path.join(format!("power{index}_cap"))),
+            cap: read_present(flags, HAS_CAP, || {
+                read_sysfs_micro(device_path.join(format!("power{index}_cap")))
+            }),
         });
     }
 
     let mut currents = Vec::with_capacity(indices.currents.len());
 
-    for index in indices.currents {
+    for (index, flags) in indices.currents {
         // The driver reports a current in milliamperes.
-        let Some(current) = read_sysfs_milli(device_path.join(format!("curr{index}_input"))) else {
+        let Some(current) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_milli(device_path.join(format!("curr{index}_input")))
+        }) else {
             continue;
         };
 
         currents.push(Current {
-            label: read_sysfs_string(device_path.join(format!("curr{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("curr{index}_label"))).ok()
+            }),
             current,
-            min: read_sysfs_milli(device_path.join(format!("curr{index}_min"))),
-            max: read_sysfs_milli(device_path.join(format!("curr{index}_max"))),
+            min: read_present(flags, HAS_MIN, || {
+                read_sysfs_milli(device_path.join(format!("curr{index}_min")))
+            }),
+            max: read_present(flags, HAS_MAX, || {
+                read_sysfs_milli(device_path.join(format!("curr{index}_max")))
+            }),
         });
     }
 
     let mut humidities = Vec::with_capacity(indices.humidities.len());
 
-    for index in indices.humidities {
+    for (index, flags) in indices.humidities {
         // The driver reports a humidity in thousandths of a percent.
-        let Some(current) = read_sysfs_milli(device_path.join(format!("humidity{index}_input")))
-        else {
+        let Some(current) = read_present(flags, HAS_INPUT, || {
+            read_sysfs_milli(device_path.join(format!("humidity{index}_input")))
+        }) else {
             continue;
         };
 
         humidities.push(Humidity {
-            label: read_sysfs_string(device_path.join(format!("humidity{index}_label"))).ok(),
+            label: read_present(flags, HAS_LABEL, || {
+                read_sysfs_string(device_path.join(format!("humidity{index}_label"))).ok()
+            }),
             current,
         });
     }
@@ -281,7 +354,24 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
     })
 }
 
-/// Get the sensors of all hardware monitoring devices by reading files in the `/sys/class/hwmon` folder, like the `sensors` command. Thermal zones also appear here through the `thermal_hwmon` bridge. Reading a sensor can be slow on some hardware, so this function should not be called at a high frequency.
+/// Get the sensors of one hardware monitoring device by reading files in the `/sys/class/hwmon/hwmonN` folder, where `N` is `hwmon`. A `NotFound` error is returned when the device does not exist.
+///
+/// Reading a sensor goes to the hardware, and the devices differ by orders of magnitude: an NVMe disk or a wireless adapter answers in milliseconds, while `coretemp` answers in microseconds. A caller that only wants one device should read that one instead of paying for every device with [`get_hwmon_devices`].
+///
+/// ```rust,no_run
+/// use mprober_lib::hwmon;
+///
+/// let hwmon_device = hwmon::get_hwmon_device(0).unwrap();
+///
+/// println!("{hwmon_device:#?}");
+/// ```
+pub fn get_hwmon_device(hwmon: usize) -> Result<HwmonDevice, Error> {
+    let path = Path::new("/sys/class/hwmon").join(format!("hwmon{hwmon}"));
+
+    read_device(&path).ok_or_else(|| io::Error::from(ErrorKind::NotFound).into())
+}
+
+/// Get the sensors of all hardware monitoring devices by reading files in the `/sys/class/hwmon` folder, like the `sensors` command. The devices are ordered by their numbers. Thermal zones also appear here through the `thermal_hwmon` bridge. Reading a sensor can be slow on some hardware, so this function should not be called at a high frequency; [`get_hwmon_device`] reads a single device when the others are not needed.
 ///
 /// ```rust
 /// use mprober_lib::hwmon;
@@ -298,33 +388,53 @@ pub fn get_hwmon_devices() -> Result<Vec<HwmonDevice>, Error> {
         Err(err) => return Err(err.into()),
     };
 
-    let mut device_paths: Vec<(usize, PathBuf)> = Vec::new();
+    let mut hwmons: Vec<usize> = Vec::new();
 
     for entry in read_dir {
         let entry = entry?;
 
         let file_name = entry.file_name();
 
-        let Some(index) = file_name
+        let Some(hwmon) = file_name
             .to_str()
             .and_then(|file_name| file_name.strip_prefix("hwmon"))
-            .and_then(|index| index.parse::<usize>().ok())
+            .and_then(|hwmon| hwmon.parse::<usize>().ok())
         else {
             continue;
         };
 
-        device_paths.push((index, entry.path()));
+        hwmons.push(hwmon);
     }
 
-    device_paths.sort_unstable_by_key(|(index, _)| *index);
+    // The directory order is arbitrary, so the devices are sorted by their number.
+    hwmons.sort_unstable();
 
-    let mut devices = Vec::with_capacity(device_paths.len());
+    let mut devices = Vec::with_capacity(hwmons.len());
 
-    for (_, device_path) in device_paths {
-        if let Some(device) = read_device(&device_path) {
+    for hwmon in hwmons {
+        // A device can be removed while the folder is being scanned.
+        if let Ok(device) = get_hwmon_device(hwmon) {
             devices.push(device);
         }
     }
 
     Ok(devices)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_sensor_file_names() {
+        assert_eq!(Some(("temp", 1, "_input")), split_sensor_file_name("temp1_input"));
+        assert_eq!(Some(("in", 0, "_label")), split_sensor_file_name("in0_label"));
+        assert_eq!(Some(("power", 12, "_average")), split_sensor_file_name("power12_average"));
+
+        // A file that names no sensor, and one whose suffix this crate does not read.
+        assert_eq!(None, split_sensor_file_name("name"));
+        assert_eq!(None, split_sensor_file_name("update_interval"));
+        assert_eq!(Some(("temp", 1, "_crit_alarm")), split_sensor_file_name("temp1_crit_alarm"));
+        assert_eq!(None, suffix_flag("_crit_alarm"));
+    }
 }

@@ -54,6 +54,7 @@ println!("{:#?}", memory::get_numa_nodes().unwrap());
 // Pressure and sensors
 println!("{:#?}", pressure::get_cpu_pressure().unwrap());
 println!("{:#?}", hwmon::get_hwmon_devices().unwrap());
+println!("{:#?}", hwmon::get_hwmon_device(0).unwrap());
 println!("{:#?}", power_supply::get_power_supplies().unwrap());
 
 // cgroup
