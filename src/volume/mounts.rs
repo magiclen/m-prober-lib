@@ -1,15 +1,10 @@
-use std::{
-    collections::HashMap,
-    fs,
-    io::{self, ErrorKind},
-    os::unix::fs::MetadataExt,
-};
+use std::{collections::HashMap, fs, os::unix::fs::MetadataExt};
 
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{read_file, unescape_octal},
+    utils::{OrEof, read_file, read_link_name, unescape_octal},
 };
 
 /// The mount points of one block device, read from the `/proc/mounts` file. [`crate::volume::MountInfo`] is the public superset of this, so this only feeds [`get_volumes`](crate::volume::get_volumes).
@@ -32,12 +27,12 @@ fn parse_mounts(data: &[u8]) -> Result<Vec<(String, String, String)>, Error> {
         if device_path.starts_with(b"/dev/") {
             let device_path = String::from_utf8_lossy(&unescape_octal(device_path)).into_owned();
 
-            let point = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let point = sc.next()?.or_eof()?;
 
             // A mount point containing a space is written as `\040` in this file.
             let point = String::from_utf8_lossy(&unescape_octal(point)).into_owned();
 
-            let fs_type = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let fs_type = sc.next()?.or_eof()?;
 
             let fs_type = String::from_utf8_lossy(fs_type).into_owned();
 
@@ -59,9 +54,7 @@ fn device_name_by_number(device_path: &str) -> Option<String> {
     let major = libc::major(rdev);
     let minor = libc::minor(rdev);
 
-    fs::read_link(format!("/sys/dev/block/{major}:{minor}"))
-        .ok()
-        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+    read_link_name(format!("/sys/dev/block/{major}:{minor}"))
 }
 
 /// Resolve a device path from `/proc/mounts` to the device name used in `/proc/diskstats`.

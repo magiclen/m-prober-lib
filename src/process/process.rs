@@ -20,7 +20,7 @@ use crate::{
         },
         process_status::read_process_status,
     },
-    utils::{clock_ticks_to_duration, proc_pid_path, read_single_record_file_into},
+    utils::{clock_ticks_to_duration, proc_pid_path, read_link_name, read_single_record_file_into},
 };
 
 /// The names of the terminal devices that were already looked up in one scan. Every lookup is a `readlink` in sysfs, and a machine full of processes normally has only a handful of terminals.
@@ -110,9 +110,7 @@ fn tty_name(major: u16, minor: u32) -> Option<String> {
         136..=143 => Some(format!("pts/{minor}")),
         _ => {
             // The kernel links every character device to its sysfs folder, whose name is the device name (e.g. `ttyS0`, `ttyUSB0`, `ttyAMA0` or `hvc0`).
-            let name = fs::read_link(format!("/sys/dev/char/{major}:{minor}"))
-                .ok()
-                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
+            let name = read_link_name(format!("/sys/dev/char/{major}:{minor}"));
 
             // Without sysfs, at least the classic serial and virtual consoles can still be named.
             name.or_else(|| match major {

@@ -2,7 +2,6 @@ use std::{
     collections::HashSet,
     ffi::CString,
     hash::{Hash, Hasher},
-    io::{self, ErrorKind},
     mem::zeroed,
     thread::sleep,
     time::Duration,
@@ -12,7 +11,7 @@ use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::read_file,
+    utils::{OrEof, read_file},
     volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, mounts::get_mounts},
 };
 
@@ -122,11 +121,9 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
             break;
         }
 
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next()?.or_eof()?;
 
-        let device =
-            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
-                .into_owned();
+        let device = String::from_utf8_lossy(sc.next()?.or_eof()?).into_owned();
 
         if let Some(mount) = mounts.remove(&device) {
             let stat = read_volume_stat(&mut sc)?;

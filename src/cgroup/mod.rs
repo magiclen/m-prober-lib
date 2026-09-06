@@ -11,8 +11,9 @@ use crate::{
     Error,
     pressure::{Pressure, parse_pressure},
     utils::{
-        is_single_path_component, parse_cpu_list, parse_number, proc_pid_path, read_file,
-        read_single_record_file, read_sysfs_number, read_sysfs_string, unescape_octal,
+        OrEof, is_single_path_component, parse_cpu_list, parse_number, proc_pid_path,
+        read_cpu_list, read_file, read_single_record_file, read_sysfs_number, read_sysfs_string,
+        unescape_octal,
     },
 };
 
@@ -236,7 +237,7 @@ fn parse_memory_events(data: &[u8]) -> Result<CgroupMemoryEvents, Error> {
     let mut sc = ScannerU8SliceAscii::new(data);
 
     while let Some(key) = sc.next()? {
-        let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let value = sc.next_u64()?.or_eof()?;
 
         match key {
             b"low" => events.low = value,
@@ -325,7 +326,7 @@ fn parse_memory_stat(data: &[u8]) -> Result<CgroupMemoryStat, Error> {
     let mut sc = ScannerU8SliceAscii::new(data);
 
     while let Some(key) = sc.next()? {
-        let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let value = sc.next_u64()?.or_eof()?;
 
         match key {
             b"anon" => stat.anon = value,
@@ -425,11 +426,11 @@ impl CgroupCPU {
 fn parse_cpu_max(data: &[u8]) -> Result<(Option<Duration>, Duration), Error> {
     let mut sc = ScannerU8SliceAscii::new(data);
 
-    let quota = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let quota = sc.next()?.or_eof()?;
 
     let quota = if quota == b"max" { None } else { Some(parse_number::<u64>(quota)?) };
 
-    let period = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let period = sc.next_u64()?.or_eof()?;
 
     Ok((quota.map(Duration::from_micros), Duration::from_micros(period)))
 }
@@ -439,7 +440,7 @@ fn parse_cpu_stat(data: &[u8], cpu: &mut CgroupCPU) -> Result<(), Error> {
     let mut sc = ScannerU8SliceAscii::new(data);
 
     while let Some(key) = sc.next()? {
-        let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let value = sc.next_u64()?.or_eof()?;
 
         match key {
             b"usage_usec" => cpu.usage = Duration::from_micros(value),
@@ -660,17 +661,11 @@ pub fn get_cgroup_cpuset<P: AsRef<Path>>(path: P) -> Result<CgroupCpuset, Error>
     let cpus_effective = parse_cpu_list(&read_sysfs_string(path.join("cpuset.cpus.effective"))?);
 
     // Only the effective files are mandatory, because a cgroup that requests nothing has empty ones.
-    let cpus = read_sysfs_string(path.join("cpuset.cpus"))
-        .map(|list| parse_cpu_list(&list))
-        .unwrap_or_default();
+    let cpus = read_cpu_list(path.join("cpuset.cpus"));
 
-    let mems_effective = read_sysfs_string(path.join("cpuset.mems.effective"))
-        .map(|list| parse_cpu_list(&list))
-        .unwrap_or_default();
+    let mems_effective = read_cpu_list(path.join("cpuset.mems.effective"));
 
-    let mems = read_sysfs_string(path.join("cpuset.mems"))
-        .map(|list| parse_cpu_list(&list))
-        .unwrap_or_default();
+    let mems = read_cpu_list(path.join("cpuset.mems"));
 
     Ok(CgroupCpuset {
         cpus,

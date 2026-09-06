@@ -4,7 +4,7 @@ use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{read_file, unescape_octal},
+    utils::{OrEof, read_file, unescape_octal},
 };
 
 /// One mount in the mount namespace of a process, read from the `/proc/PID/mountinfo` file.
@@ -58,7 +58,7 @@ impl MountInfo {
 /// Read the next field of a `mountinfo` line, which the kernel always writes in full.
 #[inline]
 fn next_field<'a>(sc: &mut ScannerU8SliceAscii<'a>) -> Result<&'a [u8], Error> {
-    Ok(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+    sc.next()?.or_eof()
 }
 
 /// Parse one line of a `mountinfo` file.
@@ -66,8 +66,8 @@ fn parse_mount_info(line: &[u8]) -> Result<MountInfo, Error> {
     // The kernel escapes whitespace inside the fields as octal sequences, so ASCII whitespace always separates the fields.
     let mut sc = ScannerU8SliceAscii::new(line);
 
-    let id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let parent_id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let id = sc.next_u32()?.or_eof()?;
+    let parent_id = sc.next_u32()?.or_eof()?;
 
     let (major, minor) = {
         // This field looks like `259:1`.

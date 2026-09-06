@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    fs::File,
+    fs::{self, File},
     io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
     str::{FromStr, from_utf8},
@@ -8,6 +8,18 @@ use std::{
 };
 
 use crate::Error;
+
+/// A shorthand for the error that every parser of this crate returns when a file ends in the middle of a record, which the scanners report as a `None`.
+pub(crate) trait OrEof<T> {
+    fn or_eof(self) -> Result<T, Error>;
+}
+
+impl<T> OrEof<T> for Option<T> {
+    #[inline]
+    fn or_eof(self) -> Result<T, Error> {
+        self.ok_or_else(|| io::Error::from(ErrorKind::UnexpectedEof).into())
+    }
+}
 
 /// Parse a number from ASCII bytes.
 #[inline]
@@ -96,6 +108,34 @@ where
     let data = read_single_record_file(path, 64)?;
 
     parse_number(data.trim_ascii_end())
+}
+
+/// Read a sysfs flag, which the kernel writes as `0` or `1`.
+#[inline]
+pub(crate) fn read_sysfs_bool<P: AsRef<Path>>(path: P) -> Option<bool> {
+    read_sysfs_number::<u8, _>(path).ok().map(|flag| flag == 1)
+}
+
+/// Read a `cpulist` attribute, which looks like `0-3,8`. An attribute that cannot be read lists no processor.
+#[inline]
+pub(crate) fn read_cpu_list<P: AsRef<Path>>(path: P) -> Vec<usize> {
+    read_sysfs_string(path).map(|list| parse_cpu_list(&list)).unwrap_or_default()
+}
+
+/// Read a symbolic link and return the name of its target, e.g. `r8169` for the `device/driver` link of a network interface.
+#[inline]
+pub(crate) fn read_link_name<P: AsRef<Path>>(path: P) -> Option<String> {
+    let target = fs::read_link(path).ok()?;
+
+    Some(target.file_name()?.to_string_lossy().into_owned())
+}
+
+/// Read a symbolic link and return the name of the folder its target lives in, e.g. `nvme0n1` for the link of the partition `nvme0n1p1`.
+#[inline]
+pub(crate) fn read_link_parent_name<P: AsRef<Path>>(path: P) -> Option<String> {
+    let target = fs::read_link(path).ok()?;
+
+    Some(target.parent()?.file_name()?.to_string_lossy().into_owned())
 }
 
 /// Read a sysfs value that the driver reports in thousandths, like millidegrees or millivolts.

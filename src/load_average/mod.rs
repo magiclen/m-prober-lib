@@ -1,8 +1,9 @@
-use std::io::{self, ErrorKind};
-
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_single_record_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_single_record_file},
+};
 
 /// The load average read from the `/proc/loadavg` file.
 #[derive(Default, Debug, Clone)]
@@ -37,18 +38,17 @@ pub fn get_load_average() -> Result<LoadAverage, Error> {
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 
-    let one = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let five = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let fifteen = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let one = sc.next_f64()?.or_eof()?;
+    let five = sc.next_f64()?.or_eof()?;
+    let fifteen = sc.next_f64()?.or_eof()?;
 
     // This field looks like `1/2789`, and reading up to a boundary does not skip the whitespace in front of it.
     sc.skip_whitespaces()?;
 
-    let running_entities =
-        sc.next_u32_until("/")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let total_entities = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let running_entities = sc.next_u32_until("/")?.or_eof()?;
+    let total_entities = sc.next_u32()?.or_eof()?;
 
-    let last_pid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let last_pid = sc.next_u32()?.or_eof()?;
 
     Ok(LoadAverage {
         one,

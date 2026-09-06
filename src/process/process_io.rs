@@ -1,13 +1,10 @@
-use std::{
-    io::{self, ErrorKind},
-    time::Duration,
-};
+use std::time::Duration;
 
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{proc_pid_path, read_single_record_file},
+    utils::{OrEof, proc_pid_path, read_single_record_file},
 };
 
 /// The rates computed between two `ProcessIO` instances.
@@ -103,7 +100,7 @@ pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
     let mut process_io = ProcessIO::default();
 
     while let Some(label) = sc.next()? {
-        let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let value = sc.next_u64()?.or_eof()?;
 
         match label {
             b"rchar:" => process_io.rchar = value,

@@ -2,7 +2,7 @@ use std::{fs, io::ErrorKind, path::Path};
 
 use crate::{
     Error,
-    utils::{read_sysfs_micro, read_sysfs_number, read_sysfs_string},
+    utils::{read_sysfs_bool, read_sysfs_micro, read_sysfs_number, read_sysfs_string},
 };
 
 /// One power supply under `/sys/class/power_supply`, e.g. a laptop battery or an AC adapter. Every driver reports a different set of attributes, so most fields are optional.
@@ -54,7 +54,7 @@ fn read_power_supply(name: String, path: &Path) -> Option<PowerSupply> {
         kind,
         scope: read_sysfs_string(path.join("scope")).ok(),
         status: read_sysfs_string(path.join("status")).ok(),
-        online: read_sysfs_number::<u8, _>(path.join("online")).ok().map(|online| online == 1),
+        online: read_sysfs_bool(path.join("online")),
         capacity: read_sysfs_number(path.join("capacity")).ok(),
         capacity_level: read_sysfs_string(path.join("capacity_level")).ok(),
         energy_now: read_sysfs_micro(path.join("energy_now")),

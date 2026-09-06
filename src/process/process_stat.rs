@@ -9,7 +9,7 @@ use scanner_rust::ScannerU8SliceAscii;
 use crate::{
     Error,
     process::{ProcessState, SchedulingPolicy},
-    utils::{page_size, proc_pid_path, read_single_record_file_into},
+    utils::{OrEof, page_size, proc_pid_path, read_single_record_file_into},
 };
 
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
@@ -103,9 +103,9 @@ pub(crate) fn get_process_ppid(process_path: &Path, buffer: &mut Vec<u8>) -> Res
     let mut sc = ScannerU8SliceAscii::new(fields);
 
     // Skip the state field.
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    Ok(sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+    sc.next_u32()?.or_eof()
 }
 
 pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
@@ -118,18 +118,18 @@ pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
 
     let mut sc = ScannerU8SliceAscii::new(fields);
 
-    let state = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let state = sc.next()?.or_eof()?;
 
     // A state letter this crate does not know is not an error, because the kernel has added new letters over time.
     stat.state =
         from_utf8(state).ok().and_then(|s| s.parse().ok()).unwrap_or(ProcessState::Unknown);
 
-    stat.ppid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.pgrp = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.session = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.ppid = sc.next_u32()?.or_eof()?;
+    stat.pgrp = sc.next_u32()?.or_eof()?;
+    stat.session = sc.next_u32()?.or_eof()?;
 
     {
-        let tty_nr = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let tty_nr = sc.next_u32()?.or_eof()?;
 
         // This is how the kernel encodes `dev_t`: 12-bit major, 20-bit minor split into two parts.
         stat.tty_nr_major = ((tty_nr >> 8) & 0xFFF) as u16;
@@ -137,7 +137,7 @@ pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
     }
 
     {
-        let tpgid = sc.next_i32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let tpgid = sc.next_i32()?.or_eof()?;
 
         if tpgid >= 0 {
             stat.tpgid = Some(tpgid as u32);
@@ -145,47 +145,45 @@ pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
     }
 
     // flags
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    stat.minflt = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.minflt = sc.next_u64()?.or_eof()?;
 
     // cminflt
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    stat.majflt = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.majflt = sc.next_u64()?.or_eof()?;
 
     // cmajflt
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    stat.utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.cutime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.cstime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.priority = sc.next_i8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.nice = sc.next_i8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.num_threads = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.utime = sc.next_u64()?.or_eof()?;
+    stat.stime = sc.next_u64()?.or_eof()?;
+    stat.cutime = sc.next_u64()?.or_eof()?;
+    stat.cstime = sc.next_u64()?.or_eof()?;
+    stat.priority = sc.next_i8()?.or_eof()?;
+    stat.nice = sc.next_i8()?.or_eof()?;
+    stat.num_threads = sc.next_usize()?.or_eof()?;
 
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    stat.starttime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.starttime = sc.next_u64()?.or_eof()?;
     // The sizes are in bytes, so they are read as `u64` even on a 32-bit target, where a 64-bit kernel reports processes that do not fit into `usize`.
-    stat.vsize = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.vsize = sc.next_u64()?.or_eof()?;
 
     // the `rss` field is read from the `statm` file later, in order to keep it consistent with the `shared` field
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
     // This is `RLIM_INFINITY` for most processes, which does not fit into a 32-bit `usize`.
-    stat.rsslim = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    stat.rsslim = sc.next_u64()?.or_eof()?;
 
     for _ in 0..13 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next()?.or_eof()?;
     }
 
-    stat.processor = sc.next_usize()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.rt_priority = sc.next_u8()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    stat.policy = SchedulingPolicy::from_raw(
-        sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-    );
+    stat.processor = sc.next_usize()?.or_eof()?;
+    stat.rt_priority = sc.next_u8()?.or_eof()?;
+    stat.policy = SchedulingPolicy::from_raw(sc.next_u32()?.or_eof()?);
 
     Ok(stat)
 }
@@ -233,12 +231,12 @@ pub(crate) fn read_process_statm_file(
 
     let mut sc = ScannerU8SliceAscii::new(buffer);
 
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
     let page_size = page_size() as u64;
 
-    stat.rss = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
-    stat.shared = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * page_size;
+    stat.rss = sc.next_u64()?.or_eof()? * page_size;
+    stat.shared = sc.next_u64()?.or_eof()? * page_size;
 
     stat.rss_anon = stat.rss.saturating_sub(stat.shared);
 

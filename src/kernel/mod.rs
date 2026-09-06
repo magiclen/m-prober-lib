@@ -1,13 +1,10 @@
-use std::{
-    borrow::Cow,
-    io::{self, ErrorKind},
-};
+use std::borrow::Cow;
 
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{read_single_record_file, read_sysfs_number, uname, utsname_field_to_string},
+    utils::{OrEof, read_single_record_file, read_sysfs_number, uname, utsname_field_to_string},
 };
 
 /// The system-wide file handle usage read from the `/proc/sys/fs/file-nr` file.
@@ -35,12 +32,12 @@ pub fn get_file_nr() -> Result<FileNr, Error> {
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 
-    let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let allocated = sc.next_u64()?.or_eof()?;
 
     // The second field is the number of unused handles, which has been `0` since Linux 2.6.
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    let max = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let max = sc.next_u64()?.or_eof()?;
 
     Ok(FileNr {
         allocated,

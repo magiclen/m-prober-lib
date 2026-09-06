@@ -1,5 +1,3 @@
-use std::io::{self, ErrorKind};
-
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
@@ -8,7 +6,7 @@ use crate::{
         ProcessStat,
         process_stat::{read_process_stat_file, split_process_stat_line},
     },
-    utils::proc_pid_path,
+    utils::{OrEof, proc_pid_path},
 };
 
 /// CPU times of a process in `USER_HZ` clock ticks.
@@ -93,11 +91,11 @@ fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, Error> {
     let mut sc = ScannerU8SliceAscii::new(fields);
 
     for _ in 0..11 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next()?.or_eof()?;
     }
 
-    let utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let utime = sc.next_u64()?.or_eof()?;
+    let stime = sc.next_u64()?.or_eof()?;
 
     Ok(ProcessTimeStat {
         utime,

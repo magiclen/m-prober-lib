@@ -1,59 +1,53 @@
-use std::{
-    collections::HashMap,
-    io::{self, ErrorKind},
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_file, volume::VolumeStat};
+use crate::{
+    Error,
+    utils::{OrEof, read_file},
+    volume::VolumeStat,
+};
 
 /// Read the counters that follow the device name in a `/proc/diskstats` line. The line is not consumed to its end, because a caller may want to skip it instead.
 pub(crate) fn read_volume_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<VolumeStat, Error> {
-    let reads_completed = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let reads_completed = sc.next_u64()?.or_eof()?;
 
     // reads merged
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
     // The sector fields in `/proc/diskstats` always use 512-byte sectors, regardless of the device's sector size.
-    let read_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
+    let read_bytes = sc.next_u64()?.or_eof()? * 512;
 
-    let read_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let read_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
-    let writes_completed = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let writes_completed = sc.next_u64()?.or_eof()?;
 
     // writes merged
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    let write_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
+    let write_bytes = sc.next_u64()?.or_eof()? * 512;
 
-    let write_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let write_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
-    let io_in_progress = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let io_in_progress = sc.next_u64()?.or_eof()?;
 
-    let io_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let io_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
-    let weighted_io_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let weighted_io_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
     // The discard and flush fields exist since Linux 4.18 and 5.5 respectively.
-    let discards_completed = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let discards_completed = sc.next_u64()?.or_eof()?;
 
     // discards merged
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next()?.or_eof()?;
 
-    let discard_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 512;
+    let discard_bytes = sc.next_u64()?.or_eof()? * 512;
 
-    let discard_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let discard_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
-    let flushes_completed = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let flushes_completed = sc.next_u64()?.or_eof()?;
 
-    let flush_time =
-        Duration::from_millis(sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?);
+    let flush_time = Duration::from_millis(sc.next_u64()?.or_eof()?);
 
     Ok(VolumeStat {
         reads_completed,
@@ -95,11 +89,9 @@ pub fn get_disk_stats() -> Result<HashMap<String, VolumeStat>, Error> {
             break;
         }
 
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next()?.or_eof()?;
 
-        let device =
-            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
-                .into_owned();
+        let device = String::from_utf8_lossy(sc.next()?.or_eof()?).into_owned();
 
         disk_stats.insert(device, read_volume_stat(&mut sc)?);
 

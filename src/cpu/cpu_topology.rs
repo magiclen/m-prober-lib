@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Error,
-    utils::{parse_cpu_list, read_sysfs_number, read_sysfs_string},
+    utils::{parse_cpu_list, read_cpu_list, read_sysfs_number, read_sysfs_string},
 };
 
 /// The topology of one logical processor, read from the `/sys/devices/system/cpu/cpuN/topology` folder.
@@ -34,12 +34,6 @@ pub struct CPUTopology {
 #[inline]
 fn read_optional_id<P: AsRef<Path>>(path: P) -> Option<usize> {
     read_sysfs_number::<i64, _>(path).ok().and_then(|id| usize::try_from(id).ok())
-}
-
-/// Read a `cpulist` attribute, which looks like `0-3,8`.
-#[inline]
-fn read_cpu_list<P: AsRef<Path>>(path: P) -> Vec<usize> {
-    read_sysfs_string(path).map(|list| parse_cpu_list(&list)).unwrap_or_default()
 }
 
 /// Get the numbers of the logical processors that are currently online, by reading the `/sys/devices/system/cpu/online` file.

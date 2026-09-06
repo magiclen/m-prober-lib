@@ -1,12 +1,14 @@
 use std::{
-    fs,
     io::{self, ErrorKind},
     path::Path,
 };
 
 use crate::{
     Error,
-    utils::{is_single_path_component, read_sysfs_number, read_sysfs_string},
+    utils::{
+        is_single_path_component, read_link_name, read_sysfs_bool, read_sysfs_number,
+        read_sysfs_string,
+    },
 };
 
 /// The link information of a network interface, read from the `/sys/class/net` folder.
@@ -70,7 +72,7 @@ pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Erro
     let operstate = read_sysfs_string(path.join("operstate"))?;
 
     // Reading `carrier`, `duplex` and `speed` fails with `EINVAL` when the interface is down, and `speed` is `-1` when the driver does not know it.
-    let carrier = read_sysfs_number::<u8, _>(path.join("carrier")).ok().map(|carrier| carrier == 1);
+    let carrier = read_sysfs_bool(path.join("carrier"));
 
     let duplex = read_sysfs_string(path.join("duplex")).ok().filter(|duplex| duplex != "unknown");
 
@@ -90,9 +92,7 @@ pub fn get_network_info<S: AsRef<str>>(interface: S) -> Result<NetworkInfo, Erro
     };
 
     // The kernel links every interface that has a driver to the folder of that driver.
-    let driver = fs::read_link(path.join("device/driver"))
-        .ok()
-        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
+    let driver = read_link_name(path.join("device/driver"));
 
     Ok(NetworkInfo {
         ifindex,

@@ -4,7 +4,7 @@ use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{parse_cpu_list, read_file, read_sysfs_string},
+    utils::{parse_cpu_list, read_cpu_list, read_file, read_sysfs_string},
 };
 
 /// The memory and the processors of one NUMA node, read from the `/sys/devices/system/node/nodeN` folder. Every memory field is in bytes.
@@ -88,9 +88,7 @@ pub fn get_numa_node(node: usize) -> Result<NumaNode, Error> {
 
     let mut numa_node = NumaNode {
         node,
-        cpus: read_sysfs_string(path.join("cpulist"))
-            .map(|list| parse_cpu_list(&list))
-            .unwrap_or_default(),
+        cpus: read_cpu_list(path.join("cpulist")),
         ..NumaNode::default()
     };
 

@@ -1,10 +1,8 @@
-use std::io::{self, ErrorKind};
-
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{read_file, unescape_octal},
+    utils::{OrEof, read_file, unescape_octal},
 };
 
 /// One active swap area, read from the `/proc/swaps` file.
@@ -36,15 +34,13 @@ fn parse_swaps(data: &[u8]) -> Result<Vec<SwapDevice>, Error> {
     while let Some(filename) = sc.next()? {
         let filename = String::from_utf8_lossy(&unescape_octal(filename)).into_owned();
 
-        let kind =
-            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
-                .into_owned();
+        let kind = String::from_utf8_lossy(sc.next()?.or_eof()?).into_owned();
 
         // The sizes are in 1024-byte units.
-        let size = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
-        let used = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+        let size = sc.next_u64()?.or_eof()? * 1024;
+        let used = sc.next_u64()?.or_eof()? * 1024;
 
-        let priority = sc.next_i32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let priority = sc.next_i32()?.or_eof()?;
 
         swaps.push(SwapDevice {
             filename,

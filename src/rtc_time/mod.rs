@@ -3,7 +3,10 @@ use std::io::{self, ErrorKind};
 use chrono::prelude::*;
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_single_record_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_single_record_file},
+};
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file. The RTC is normally set to UTC, but the file carries no timezone, so a `NaiveDateTime` is returned. The file only exists when an RTC driver is loaded, which is not the case in most containers.
 ///
@@ -21,19 +24,19 @@ pub fn get_rtc_date_time() -> Result<NaiveDateTime, Error> {
     let mut sc = ScannerU8SliceAscii::new(&data);
 
     // The labels are searched for explicitly, so the order and the width of the fields do not matter.
-    sc.drop_next_until("rtc_time")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("rtc_time")?.or_eof()?;
+    sc.drop_next_until(": ")?.or_eof()?;
 
-    let hour = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let minute = sc.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let second = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let hour = sc.next_u32_until(":")?.or_eof()?;
+    let minute = sc.next_u32_until(":")?.or_eof()?;
+    let second = sc.next_u32()?.or_eof()?;
 
-    sc.drop_next_until("rtc_date")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    sc.drop_next_until(": ")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("rtc_date")?.or_eof()?;
+    sc.drop_next_until(": ")?.or_eof()?;
 
-    let year = sc.next_i32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let month = sc.next_u32_until("-")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let date = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let year = sc.next_i32_until("-")?.or_eof()?;
+    let month = sc.next_u32_until("-")?.or_eof()?;
+    let date = sc.next_u32()?.or_eof()?;
 
     let date = NaiveDate::from_ymd_opt(year, month, date)
         .ok_or(io::Error::from(ErrorKind::InvalidData))?;

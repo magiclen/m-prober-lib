@@ -9,7 +9,6 @@ mod socket_stat;
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
-    io::{self, ErrorKind},
     thread::sleep,
     time::Duration,
 };
@@ -23,7 +22,10 @@ use scanner_rust::ScannerU8SliceAscii;
 pub use socket_connection::*;
 pub use socket_stat::*;
 
-use crate::{Error, utils::read_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_file},
+};
 
 /// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]
@@ -64,7 +66,7 @@ pub fn get_networks() -> Result<Vec<Network>, Error> {
     let mut sc = ScannerU8SliceAscii::new(&data);
 
     for _ in 0..2 {
-        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next_line()?.or_eof()?;
     }
 
     let mut networks = Vec::with_capacity(8);
@@ -82,20 +84,20 @@ pub fn get_networks() -> Result<Vec<Network>, Error> {
         // The kernel only rejects `/`, `:` and whitespace in an interface name, so it may not be valid UTF-8.
         let interface = String::from_utf8_lossy(interface).into_owned();
 
-        let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let receive_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let receive_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let receive_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_bytes = sc.next_u64()?.or_eof()?;
+        let receive_packets = sc.next_u64()?.or_eof()?;
+        let receive_errors = sc.next_u64()?.or_eof()?;
+        let receive_dropped = sc.next_u64()?.or_eof()?;
 
         // fifo, frame, compressed, multicast
         for _ in 0..4 {
-            sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            sc.drop_next()?.or_eof()?;
         }
 
-        let transmit_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let transmit_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let transmit_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let transmit_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_bytes = sc.next_u64()?.or_eof()?;
+        let transmit_packets = sc.next_u64()?.or_eof()?;
+        let transmit_errors = sc.next_u64()?.or_eof()?;
+        let transmit_dropped = sc.next_u64()?.or_eof()?;
 
         let stat = NetworkStat {
             receive_bytes,

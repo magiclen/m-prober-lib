@@ -9,7 +9,7 @@ use scanner_rust::ScannerU8SliceAscii;
 use crate::{
     Error,
     cpu::{CPUTime, proc_stat_capacity},
-    utils::{read_file, read_file_head},
+    utils::{OrEof, read_file, read_file_head},
 };
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
@@ -98,16 +98,16 @@ impl CPUStat {
 /// Read the ten time fields that follow a `cpu` label in `/proc/stat`.
 #[inline]
 fn read_cpu_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<CPUStat, Error> {
-    let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let idle = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let iowait = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let irq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let softirq = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let steal = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let guest = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let guest_nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let user = sc.next_u64()?.or_eof()?;
+    let nice = sc.next_u64()?.or_eof()?;
+    let system = sc.next_u64()?.or_eof()?;
+    let idle = sc.next_u64()?.or_eof()?;
+    let iowait = sc.next_u64()?.or_eof()?;
+    let irq = sc.next_u64()?.or_eof()?;
+    let softirq = sc.next_u64()?.or_eof()?;
+    let steal = sc.next_u64()?.or_eof()?;
+    let guest = sc.next_u64()?.or_eof()?;
+    let guest_nice = sc.next_u64()?.or_eof()?;
 
     Ok(CPUStat {
         user,
@@ -138,7 +138,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 
-    let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let label = sc.next()?.or_eof()?;
 
     if label != b"cpu" {
         return Err(io::Error::from(ErrorKind::InvalidData).into());
@@ -165,7 +165,7 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
     let mut cpus_stat = Vec::with_capacity(16);
 
     if with_average {
-        let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let label = sc.next()?.or_eof()?;
 
         if label != b"cpu" {
             return Err(io::Error::from(ErrorKind::InvalidData).into());
@@ -173,7 +173,7 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
 
         cpus_stat.push(read_cpu_stat(&mut sc)?);
     } else {
-        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        sc.drop_next_line()?.or_eof()?;
     }
 
     while let Some(label) = sc.next()? {

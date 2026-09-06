@@ -11,7 +11,10 @@ use scanner_rust::ScannerU8SliceAscii;
 pub use swap_device::*;
 pub use vm_stat::*;
 
-use crate::{Error, utils::read_single_record_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_single_record_file},
+};
 
 /// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]
@@ -94,7 +97,7 @@ fn parse_meminfo(data: &[u8]) -> Result<Free, Error> {
         if let Some(i) = USEFUL_ITEMS.iter().position(|&item| label == item)
             && item_values[i].is_none()
         {
-            let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let value = sc.next_u64()?.or_eof()?;
 
             item_values[i] = Some(value * 1024);
 

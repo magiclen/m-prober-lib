@@ -5,7 +5,10 @@ use std::{
 
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_single_record_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_single_record_file},
+};
 
 /// One line of a PSI (Pressure Stall Information) file.
 #[derive(Default, Debug, Clone)]
@@ -33,17 +36,17 @@ pub struct Pressure {
 
 fn read_pressure_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<PressureStat, Error> {
     // The line looks like `some avg10=0.00 avg60=0.00 avg300=0.00 total=2357091`.
-    sc.drop_next_until("avg10=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let avg10 = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("avg10=")?.or_eof()?;
+    let avg10 = sc.next_f64()?.or_eof()?;
 
-    sc.drop_next_until("avg60=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let avg60 = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("avg60=")?.or_eof()?;
+    let avg60 = sc.next_f64()?.or_eof()?;
 
-    sc.drop_next_until("avg300=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let avg300 = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("avg300=")?.or_eof()?;
+    let avg300 = sc.next_f64()?.or_eof()?;
 
-    sc.drop_next_until("total=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let total = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    sc.drop_next_until("total=")?.or_eof()?;
+    let total = sc.next_u64()?.or_eof()?;
 
     Ok(PressureStat {
         avg10,
@@ -56,7 +59,7 @@ fn read_pressure_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<PressureStat, 
 pub(crate) fn parse_pressure(data: &[u8]) -> Result<Pressure, Error> {
     let mut sc = ScannerU8SliceAscii::new(data);
 
-    let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let label = sc.next()?.or_eof()?;
 
     if label != b"some" {
         return Err(io::Error::from(ErrorKind::InvalidData).into());

@@ -1,8 +1,10 @@
-use std::io::{self, ErrorKind};
-
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, cpu::proc_stat_capacity, utils::read_file};
+use crate::{
+    Error,
+    cpu::proc_stat_capacity,
+    utils::{OrEof, read_file},
+};
 
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
@@ -43,28 +45,22 @@ pub fn get_cpu_activity() -> Result<CPUActivity, Error> {
     while let Some(label) = sc.next()? {
         match label {
             b"intr" => {
-                activity.interrupts =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.interrupts = sc.next_u64()?.or_eof()?;
             },
             b"ctxt" => {
-                activity.context_switches =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.context_switches = sc.next_u64()?.or_eof()?;
             },
             b"processes" => {
-                activity.processes_created =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.processes_created = sc.next_u64()?.or_eof()?;
             },
             b"procs_running" => {
-                activity.procs_running =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.procs_running = sc.next_u64()?.or_eof()?;
             },
             b"procs_blocked" => {
-                activity.procs_blocked =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.procs_blocked = sc.next_u64()?.or_eof()?;
             },
             b"softirq" => {
-                activity.softirqs =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                activity.softirqs = sc.next_u64()?.or_eof()?;
             },
             _ => (),
         }

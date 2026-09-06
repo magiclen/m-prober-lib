@@ -1,12 +1,12 @@
-use std::{
-    io::{self, ErrorKind},
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 use chrono::prelude::*;
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_single_record_file};
+use crate::{
+    Error,
+    utils::{OrEof, read_single_record_file},
+};
 
 /// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]
@@ -52,8 +52,8 @@ pub fn get_uptime() -> Result<Uptime, Error> {
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 
-    let uptime = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let idle_time = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let uptime = sc.next_f64()?.or_eof()?;
+    let idle_time = sc.next_f64()?.or_eof()?;
 
     Ok(Uptime {
         total_uptime:      Duration::from_secs_f64(uptime),

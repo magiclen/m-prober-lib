@@ -6,7 +6,10 @@ use std::{
 
 use crate::{
     Error,
-    utils::{is_single_path_component, read_sysfs_number, read_sysfs_string},
+    utils::{
+        is_single_path_component, read_link_parent_name, read_sysfs_bool, read_sysfs_number,
+        read_sysfs_string,
+    },
 };
 
 /// The disk a partition belongs to.
@@ -101,20 +104,13 @@ pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo
     // `size` is in 512-byte sectors, regardless of the device's sector size.
     let size = read_sysfs_number::<u64, _>(path.join("size"))? * 512;
 
-    let read_only = read_sysfs_number::<u8, _>(path.join("ro")).ok().map(|v| v == 1);
+    let read_only = read_sysfs_bool(path.join("ro"));
 
     // A partition has no `queue` folder and no `device` link, but `..` of its symlinked folder is its parent disk.
     let partition = match read_sysfs_number::<u32, _>(path.join("partition")) {
         Ok(number) => {
             // The parent disk is the folder the partition folder lives in, whose name sysfs does not repeat anywhere else.
-            let disk = fs::read_link(&path)
-                .ok()
-                .and_then(|link| {
-                    link.parent().and_then(|parent| {
-                        parent.file_name().map(|name| name.to_string_lossy().into_owned())
-                    })
-                })
-                .unwrap_or_default();
+            let disk = read_link_parent_name(&path).unwrap_or_default();
 
             Some(PartitionInfo {
                 disk,
@@ -126,10 +122,9 @@ pub fn get_block_device_info<S: AsRef<str>>(device: S) -> Result<BlockDeviceInfo
 
     let disk_path = if partition.is_some() { path.join("..") } else { path };
 
-    let rotational =
-        read_sysfs_number::<u8, _>(disk_path.join("queue/rotational")).ok().map(|v| v == 1);
+    let rotational = read_sysfs_bool(disk_path.join("queue/rotational"));
 
-    let removable = read_sysfs_number::<u8, _>(disk_path.join("removable")).ok().map(|v| v == 1);
+    let removable = read_sysfs_bool(disk_path.join("removable"));
 
     let logical_block_size = read_sysfs_number(disk_path.join("queue/logical_block_size")).ok();
     let physical_block_size = read_sysfs_number(disk_path.join("queue/physical_block_size")).ok();

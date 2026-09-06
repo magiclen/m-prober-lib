@@ -6,7 +6,9 @@ use std::{
 
 use crate::{
     Error,
-    utils::{read_sysfs_micro, read_sysfs_milli, read_sysfs_number, read_sysfs_string},
+    utils::{
+        read_link_name, read_sysfs_micro, read_sysfs_milli, read_sysfs_number, read_sysfs_string,
+    },
 };
 
 /// One temperature sensor of a hardware monitoring device.
@@ -171,9 +173,7 @@ fn read_device(device_path: &Path) -> Option<HwmonDevice> {
     // A device without a name cannot be identified, so it is skipped.
     let name = read_sysfs_string(device_path.join("name")).ok()?;
 
-    let device = fs::read_link(device_path.join("device"))
-        .ok()
-        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
+    let device = read_link_name(device_path.join("device"));
 
     let indices = scan_sensor_indices(device_path)?;
 

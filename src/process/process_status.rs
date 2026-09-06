@@ -1,13 +1,10 @@
-use std::{
-    io::{self, ErrorKind},
-    path::Path,
-};
+use std::path::Path;
 
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{proc_pid_path, read_single_record_file_into},
+    utils::{OrEof, proc_pid_path, read_single_record_file_into},
 };
 
 /// Fields read from the `/proc/PID/status` file. Memory fields are in bytes.
@@ -53,38 +50,28 @@ fn parse_process_status(data: &[u8], stop_at_threads: bool) -> Result<ProcessSta
 
         match label {
             b"Uid:" => {
-                status.real_uid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.effective_uid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.saved_set_uid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.fs_uid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.real_uid = sc.next_u32()?.or_eof()?;
+                status.effective_uid = sc.next_u32()?.or_eof()?;
+                status.saved_set_uid = sc.next_u32()?.or_eof()?;
+                status.fs_uid = sc.next_u32()?.or_eof()?;
             },
             b"Gid:" => {
-                status.real_gid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.effective_gid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.saved_set_gid =
-                    sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-                status.fs_gid = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.real_gid = sc.next_u32()?.or_eof()?;
+                status.effective_gid = sc.next_u32()?.or_eof()?;
+                status.saved_set_gid = sc.next_u32()?.or_eof()?;
+                status.fs_gid = sc.next_u32()?.or_eof()?;
             },
             b"VmHWM:" => {
-                status.vm_hwm =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+                status.vm_hwm = sc.next_u64()?.or_eof()? * 1024;
             },
             b"VmSwap:" => {
-                status.vm_swap =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+                status.vm_swap = sc.next_u64()?.or_eof()? * 1024;
             },
             b"voluntary_ctxt_switches:" => {
-                status.voluntary_ctxt_switches =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.voluntary_ctxt_switches = sc.next_u64()?.or_eof()?;
             },
             b"nonvoluntary_ctxt_switches:" => {
-                status.nonvoluntary_ctxt_switches =
-                    sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                status.nonvoluntary_ctxt_switches = sc.next_u64()?.or_eof()?;
             },
             _ => (),
         }
