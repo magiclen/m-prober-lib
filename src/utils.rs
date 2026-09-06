@@ -97,6 +97,18 @@ where
     parse_number(data.trim_ascii_end())
 }
 
+/// Read a sysfs value that the driver reports in thousandths, like millidegrees or millivolts.
+#[inline]
+pub(crate) fn read_sysfs_milli<P: AsRef<Path>>(path: P) -> Option<f64> {
+    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1000.0)
+}
+
+/// Read a sysfs value that the driver reports in millionths, like microwatts or microvolts.
+#[inline]
+pub(crate) fn read_sysfs_micro<P: AsRef<Path>>(path: P) -> Option<f64> {
+    read_sysfs_number::<i64, _>(path).ok().map(|value| value as f64 / 1_000_000.0)
+}
+
 /// Build the path of the `/proc/PID` folder of a process.
 #[inline]
 pub(crate) fn proc_pid_path(pid: u32) -> PathBuf {

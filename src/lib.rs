@@ -37,10 +37,14 @@ mod utils;
 
 /// The boot time of the system.
 pub mod btime;
+/// The resource usage, limits and events of a cgroup (v2), e.g. the limits of the container the process runs in.
+pub mod cgroup;
 /// CPU models, topology, frequencies, per-CPU time counters and system-wide scheduler counters.
 pub mod cpu;
 /// The hostname of the system.
 pub mod hostname;
+/// Temperature, fan, voltage, power, current and humidity sensors, like the `sensors` command.
+pub mod hwmon;
 /// The kernel version, the `uname` fields, the file handle usage, the boot parameters and the taint flags.
 pub mod kernel;
 /// The load average.
@@ -49,12 +53,16 @@ pub mod load_average;
 pub mod memory;
 /// Network interfaces, their counters, their link information, their IP addresses, the protocol counters, the sockets and the routing table.
 pub mod network;
-/// Running processes, their stats, their memory, their threads and their I/O counters.
-pub mod process;
+/// Batteries and power adapters.
+pub mod power_supply;
 /// PSI (Pressure Stall Information) for CPU, memory and I/O.
 pub mod pressure;
+/// Running processes, their stats, their memory, their threads and their I/O counters.
+pub mod process;
 /// The datetime of the hardware real time clock.
 pub mod rtc_time;
+/// The identity of the machine as the firmware and the kernel report it.
+pub mod system;
 /// The time since the system booted.
 pub mod uptime;
 /// Block devices, their attributes, their mounts, their sizes and their I/O counters.
