@@ -22,21 +22,24 @@ pub struct NetworkAddress {
 ///
 /// # Safety
 ///
-/// `addr` must be null or point to a `sockaddr` whose real type matches its `sa_family`, which is what `getifaddrs` guarantees.
+/// `addr` must be null or point to a readable `sockaddr` whose real type matches its `sa_family`, which is what `getifaddrs` guarantees. The structs are read unaligned, so the pointer needs no alignment beyond being valid.
 unsafe fn sockaddr_to_ip_addr(addr: *const libc::sockaddr) -> Option<IpAddr> {
     if addr.is_null() {
         return None;
     }
 
-    match i32::from(unsafe { (*addr).sa_family }) {
+    // A `sockaddr` is only two-byte aligned, so the bigger structs are read unaligned instead of being borrowed, which would already be undefined behaviour on a pointer that does not meet their alignment.
+    let family = unsafe { ptr::read_unaligned(&raw const (*addr).sa_family) };
+
+    match i32::from(family) {
         libc::AF_INET => {
-            let addr = unsafe { &*(addr as *const libc::sockaddr_in) };
+            let addr: libc::sockaddr_in = unsafe { ptr::read_unaligned(addr.cast()) };
 
             // `s_addr` is in network byte order, which is the order of the bytes in memory.
             Some(IpAddr::V4(Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes())))
         },
         libc::AF_INET6 => {
-            let addr = unsafe { &*(addr as *const libc::sockaddr_in6) };
+            let addr: libc::sockaddr_in6 = unsafe { ptr::read_unaligned(addr.cast()) };
 
             Some(IpAddr::V6(Ipv6Addr::from(addr.sin6_addr.s6_addr)))
         },

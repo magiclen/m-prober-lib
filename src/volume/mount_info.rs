@@ -61,6 +61,53 @@ fn next_field<'a>(sc: &mut ScannerU8SliceAscii<'a>) -> Result<&'a [u8], Error> {
     Ok(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
 }
 
+/// Parse one line of a `mountinfo` file.
+fn parse_mount_info(line: &[u8]) -> Result<MountInfo, Error> {
+    // The kernel escapes whitespace inside the fields as octal sequences, so ASCII whitespace always separates the fields.
+    let mut sc = ScannerU8SliceAscii::new(line);
+
+    let id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let parent_id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    let (major, minor) = {
+        // This field looks like `259:1`.
+        let mut device = ScannerU8SliceAscii::new(next_field(&mut sc)?);
+
+        let major = device.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
+        let minor = device.next_u32()?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
+
+        (major, minor)
+    };
+
+    let root = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+    let point = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+    let options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
+
+    // A variable number of optional fields follows, terminated by a single hyphen.
+    loop {
+        if next_field(&mut sc)? == b"-" {
+            break;
+        }
+    }
+
+    let fs_type = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
+    let source = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+    let super_options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
+
+    Ok(MountInfo {
+        id,
+        parent_id,
+        major,
+        minor,
+        root,
+        point,
+        options,
+        fs_type,
+        source,
+        super_options,
+    })
+}
+
 /// Parse the content of a `mountinfo` file.
 fn parse_mount_infos(data: &[u8]) -> Result<Vec<MountInfo>, Error> {
     let mut lines = ScannerU8SliceAscii::new(data);
@@ -68,54 +115,10 @@ fn parse_mount_infos(data: &[u8]) -> Result<Vec<MountInfo>, Error> {
     let mut mount_infos = Vec::with_capacity(16);
 
     while let Some(line) = lines.next_line()? {
-        if line.is_empty() {
-            continue;
+        // A line the caller was fed without its fields, e.g. from a trimmed file, only loses that mount instead of ending the parsing.
+        if let Ok(mount_info) = parse_mount_info(line) {
+            mount_infos.push(mount_info);
         }
-
-        // The kernel escapes whitespace inside the fields as octal sequences, so ASCII whitespace always separates the fields.
-        let mut sc = ScannerU8SliceAscii::new(line);
-
-        let id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-        let parent_id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-        let (major, minor) = {
-            // This field looks like `259:1`.
-            let mut device = ScannerU8SliceAscii::new(next_field(&mut sc)?);
-
-            let major =
-                device.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
-            let minor = device.next_u32()?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
-
-            (major, minor)
-        };
-
-        let root = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
-        let point = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
-        let options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
-
-        // A variable number of optional fields follows, terminated by a single hyphen.
-        loop {
-            if next_field(&mut sc)? == b"-" {
-                break;
-            }
-        }
-
-        let fs_type = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
-        let source = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
-        let super_options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
-
-        mount_infos.push(MountInfo {
-            id,
-            parent_id,
-            major,
-            minor,
-            root,
-            point,
-            options,
-            fs_type,
-            source,
-            super_options,
-        });
     }
 
     Ok(mount_infos)
@@ -176,6 +179,24 @@ mod tests {
         // A file system without a block device is included too.
         assert_eq!("10.0.0.1:/export", mount_infos[4].source);
         assert_eq!("nfs4", mount_infos[4].fs_type);
+    }
+
+    #[test]
+    fn parse_skipping_truncated_lines() {
+        // A line without its fields must not cost the caller every other mount.
+        const TRUNCATED: &[u8] = b"27 34 0:24 / /sys rw,nosuid shared:7 - sysfs sysfs rw
+truncated
+95 34 259:1 / /boot/efi ro,relatime - vfat /dev/nvme0n1p1 ro
+120 34 0:59 / /mnt rw,relatime shared:2
+";
+
+        let mount_infos = parse_mount_infos(TRUNCATED).unwrap();
+
+        assert_eq!(2, mount_infos.len());
+        assert_eq!("/sys", mount_infos[0].point);
+
+        // The line without the hyphen that ends the optional fields is skipped as well.
+        assert_eq!("/boot/efi", mount_infos[1].point);
     }
 
     #[test]

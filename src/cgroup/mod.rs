@@ -12,7 +12,7 @@ use crate::{
     pressure::{Pressure, parse_pressure},
     utils::{
         is_single_path_component, parse_cpu_list, parse_number, proc_pid_path, read_file,
-        read_single_record_file, read_sysfs_number, read_sysfs_string,
+        read_single_record_file, read_sysfs_number, read_sysfs_string, unescape_octal,
     },
 };
 
@@ -42,9 +42,10 @@ fn find_cgroup2_mount(data: &[u8]) -> Result<Option<(String, String)>, Error> {
         }
 
         if fs_type == Some(b"cgroup2".as_slice()) {
+            // The kernel escapes whitespace inside these fields as octal sequences, just like in the fields of `crate::volume::MountInfo`.
             return Ok(Some((
-                String::from_utf8_lossy(root).into_owned(),
-                String::from_utf8_lossy(point).into_owned(),
+                String::from_utf8_lossy(&unescape_octal(root)).into_owned(),
+                String::from_utf8_lossy(&unescape_octal(point)).into_owned(),
             )));
         }
     }

@@ -115,7 +115,8 @@ pub fn get_networks() -> Result<Vec<Network>, Error> {
 
         networks.push(network);
 
-        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        // A `None` here only means the file ended without a trailing newline, which the loop condition handles.
+        sc.drop_next_line()?;
     }
 
     Ok(networks)

@@ -133,7 +133,7 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
 
             // A mount point can be unreachable (a disconnected network device, a directory without the search permission), so a failure here only skips this volume.
             let Some(usage) = statvfs(&mount.points[0]) else {
-                sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+                sc.drop_next_line()?;
 
                 continue;
             };
@@ -154,7 +154,8 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
             volumes.push(volume);
         }
 
-        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        // A `None` here only means the file ended without a trailing newline, which the loop condition handles.
+        sc.drop_next_line()?;
     }
 
     Ok(volumes)

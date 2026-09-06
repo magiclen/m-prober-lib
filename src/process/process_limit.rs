@@ -51,8 +51,9 @@ fn prlimit(pid: u32, resource: libc::c_int) -> Result<ProcessLimit, Error> {
     let rtn = unsafe {
         libc::syscall(
             libc::SYS_prlimit64,
-            pid as libc::pid_t,
-            resource,
+            // `syscall` is variadic and reads its arguments back as `long`, so a 32-bit value has to be widened here instead of leaving the upper half of the slot undefined.
+            pid as libc::c_long,
+            resource as libc::c_long,
             ptr::null::<RawRlimit>(),
             &mut limit as *mut RawRlimit,
         )

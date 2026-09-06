@@ -1,4 +1,7 @@
-use std::io::{self, ErrorKind};
+use std::{
+    borrow::Cow,
+    io::{self, ErrorKind},
+};
 
 use scanner_rust::ScannerU8SliceAscii;
 
@@ -139,15 +142,70 @@ pub fn get_threads_max() -> Result<u64, Error> {
 pub fn get_kernel_cmdline() -> Result<Vec<String>, Error> {
     let data = read_single_record_file("/proc/cmdline", 1024)?;
 
-    let mut sc = ScannerU8SliceAscii::new(&data);
+    Ok(split_kernel_cmdline(&data))
+}
 
-    let mut cmdline = Vec::new();
+/// Drop the double quotes that the kernel strips from a parameter. They surround either the whole parameter or only the value that follows the first `=`.
+fn unquote_kernel_parameter(parameter: &[u8]) -> Cow<'_, [u8]> {
+    let quote = if parameter.first() == Some(&b'"') {
+        0
+    } else {
+        match parameter.iter().position(|&b| b == b'=') {
+            Some(equals) if parameter.get(equals + 1) == Some(&b'"') => equals + 1,
+            _ => return Cow::Borrowed(parameter),
+        }
+    };
 
-    while let Some(parameter) = sc.next()? {
-        cmdline.push(String::from_utf8_lossy(parameter).into_owned());
+    // The opening quote needs a closing one, and both have to fit.
+    if parameter.len() < quote + 2 || parameter.last() != Some(&b'"') {
+        return Cow::Borrowed(parameter);
     }
 
-    Ok(cmdline)
+    let mut result = Vec::with_capacity(parameter.len() - 2);
+
+    result.extend_from_slice(&parameter[..quote]);
+    result.extend_from_slice(&parameter[(quote + 1)..(parameter.len() - 1)]);
+
+    Cow::Owned(result)
+}
+
+/// Split the content of `/proc/cmdline` into parameters, the way `next_arg` in `lib/cmdline.c` does: a parameter ends at whitespace that is not inside double quotes, so a quoted value keeps its spaces.
+fn split_kernel_cmdline(data: &[u8]) -> Vec<String> {
+    let mut cmdline = Vec::new();
+
+    let mut i = 0;
+
+    while i < data.len() {
+        if data[i].is_ascii_whitespace() {
+            i += 1;
+
+            continue;
+        }
+
+        let start = i;
+
+        let mut in_quote = false;
+
+        while i < data.len() {
+            let byte = data[i];
+
+            if byte.is_ascii_whitespace() && !in_quote {
+                break;
+            }
+
+            if byte == b'"' {
+                in_quote = !in_quote;
+            }
+
+            i += 1;
+        }
+
+        // A parameter is arbitrary bytes, so it may not be valid UTF-8.
+        cmdline
+            .push(String::from_utf8_lossy(&unquote_kernel_parameter(&data[start..i])).into_owned());
+    }
+
+    cmdline
 }
 
 /// Get the taint flags of the kernel by reading the `/proc/sys/kernel/tainted` file. A value of `0` means the kernel is not tainted, and any other value means something happened that makes a bug report less trustworthy. Use [`get_kernel_taint_reasons`] to get the names of the flags.
@@ -209,6 +267,26 @@ pub fn get_kernel_taint_reasons(tainted: u64) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn split_cmdline() {
+        // A machine without any quoted parameter is split exactly as before.
+        assert_eq!(
+            vec!["BOOT_IMAGE=/vmlinuz-6.17.0-40-generic", "root=UUID=7fa5eea6", "ro", "quiet"],
+            split_kernel_cmdline(
+                b"BOOT_IMAGE=/vmlinuz-6.17.0-40-generic root=UUID=7fa5eea6 ro quiet\n"
+            )
+        );
+
+        // Whitespace inside quotes does not end a parameter, and the kernel drops the quotes.
+        assert_eq!(vec!["a=1", "b=x y", "c=2"], split_kernel_cmdline(b"a=1 b=\"x y\" c=2\n"));
+        assert_eq!(vec!["a b"], split_kernel_cmdline(b"\"a b\"\n"));
+
+        // A quote that surrounds neither the parameter nor its whole value is kept.
+        assert_eq!(vec!["k=a\"b\"c"], split_kernel_cmdline(b"k=a\"b\"c\n"));
+
+        assert!(split_kernel_cmdline(b"\n").is_empty());
+    }
 
     #[test]
     fn taint_reasons() {

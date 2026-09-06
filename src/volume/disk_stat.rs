@@ -103,7 +103,8 @@ pub fn get_disk_stats() -> Result<HashMap<String, VolumeStat>, Error> {
 
         disk_stats.insert(device, read_volume_stat(&mut sc)?);
 
-        sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        // A `None` here only means the file ended without a trailing newline, which the loop condition handles.
+        sc.drop_next_line()?;
     }
 
     Ok(disk_stats)
