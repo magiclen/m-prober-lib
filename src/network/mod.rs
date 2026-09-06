@@ -19,11 +19,11 @@ pub use network_info::*;
 pub use network_stat::*;
 pub use protocol_stat::*;
 pub use route::*;
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 pub use socket_connection::*;
 pub use socket_stat::*;
 
-use crate::Error;
+use crate::{Error, utils::read_file};
 
 /// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]
@@ -59,13 +59,15 @@ impl PartialEq for Network {
 /// println!("{networks:#?}");
 /// ```
 pub fn get_networks() -> Result<Vec<Network>, Error> {
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
+    let data = read_file("/proc/net/dev", 4096)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     for _ in 0..2 {
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    let mut networks = Vec::with_capacity(1);
+    let mut networks = Vec::with_capacity(8);
 
     loop {
         // Interface names are right-aligned in this file, so the padding must be skipped before reading up to the colon.
@@ -73,12 +75,12 @@ pub fn get_networks() -> Result<Vec<Network>, Error> {
             break;
         }
 
-        let Some(interface) = sc.next_until_raw(":")? else {
+        let Some(interface) = sc.next_until(":")? else {
             break;
         };
 
         // The kernel only rejects `/`, `:` and whitespace in an interface name, so it may not be valid UTF-8.
-        let interface = String::from_utf8_lossy(&interface).into_owned();
+        let interface = String::from_utf8_lossy(interface).into_owned();
 
         let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         let receive_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

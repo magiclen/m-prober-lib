@@ -1,12 +1,11 @@
 use std::{
-    fs::File,
-    io::{self, ErrorKind, Read},
+    io::{self, ErrorKind},
     time::Duration,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::Error;
+use crate::{Error, utils::read_single_record_file};
 
 /// One line of a PSI (Pressure Stall Information) file.
 #[derive(Default, Debug, Clone)]
@@ -32,9 +31,7 @@ pub struct Pressure {
     pub full: Option<PressureStat>,
 }
 
-fn read_pressure_stat<R: Read, const N: usize>(
-    sc: &mut ScannerAscii<R, N>,
-) -> Result<PressureStat, Error> {
+fn read_pressure_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<PressureStat, Error> {
     // The line looks like `some avg10=0.00 avg60=0.00 avg300=0.00 total=2357091`.
     sc.drop_next_until("avg10=")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let avg10 = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -56,10 +53,10 @@ fn read_pressure_stat<R: Read, const N: usize>(
     })
 }
 
-pub(crate) fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
-    let mut sc: ScannerAscii<R, 256> = ScannerAscii::new2(reader);
+pub(crate) fn parse_pressure(data: &[u8]) -> Result<Pressure, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
-    let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     if label != b"some" {
         return Err(io::Error::from(ErrorKind::InvalidData).into());
@@ -67,7 +64,7 @@ pub(crate) fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
 
     let some = read_pressure_stat(&mut sc)?;
 
-    let full = match sc.next_raw()? {
+    let full = match sc.next()? {
         Some(label) if label == b"full" => Some(read_pressure_stat(&mut sc)?),
         _ => None,
     };
@@ -89,7 +86,7 @@ pub(crate) fn parse_pressure<R: Read>(reader: R) -> Result<Pressure, Error> {
 /// ```
 #[inline]
 pub fn get_cpu_pressure() -> Result<Pressure, Error> {
-    parse_pressure(File::open("/proc/pressure/cpu")?)
+    parse_pressure(&read_single_record_file("/proc/pressure/cpu", 256)?)
 }
 
 /// Get the memory pressure by reading the `/proc/pressure/memory` file. PSI needs `CONFIG_PSI` and must not be disabled by the `psi=0` kernel parameter, otherwise the file does not exist.
@@ -103,7 +100,7 @@ pub fn get_cpu_pressure() -> Result<Pressure, Error> {
 /// ```
 #[inline]
 pub fn get_memory_pressure() -> Result<Pressure, Error> {
-    parse_pressure(File::open("/proc/pressure/memory")?)
+    parse_pressure(&read_single_record_file("/proc/pressure/memory", 256)?)
 }
 
 /// Get the I/O pressure by reading the `/proc/pressure/io` file. PSI needs `CONFIG_PSI` and must not be disabled by the `psi=0` kernel parameter, otherwise the file does not exist.
@@ -117,7 +114,7 @@ pub fn get_memory_pressure() -> Result<Pressure, Error> {
 /// ```
 #[inline]
 pub fn get_io_pressure() -> Result<Pressure, Error> {
-    parse_pressure(File::open("/proc/pressure/io")?)
+    parse_pressure(&read_single_record_file("/proc/pressure/io", 256)?)
 }
 
 #[cfg(test)]

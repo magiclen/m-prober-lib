@@ -1,8 +1,8 @@
 use std::io::{self, ErrorKind};
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::Error;
+use crate::{Error, utils::read_file};
 
 /// Paging counters read from the `/proc/vmstat` file.
 #[derive(Default, Debug, Clone)]
@@ -34,16 +34,18 @@ pub struct VmStat {
 pub fn get_vm_stat() -> Result<VmStat, Error> {
     const USEFUL_ITEMS_COUNT: usize = 6;
 
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/vmstat")?;
+    let data = read_file("/proc/vmstat", 8192)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let mut vm_stat = VmStat::default();
 
     let mut remaining = USEFUL_ITEMS_COUNT;
 
-    while let Some(label) = sc.next_raw()? {
+    while let Some(label) = sc.next()? {
         let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        match label.as_slice() {
+        match label {
             b"pgpgin" => vm_stat.pages_in = value,
             b"pgpgout" => vm_stat.pages_out = value,
             b"pswpin" => vm_stat.swap_in = value,

@@ -4,9 +4,9 @@ use std::{
 };
 
 use chrono::prelude::*;
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::Error;
+use crate::{Error, utils::read_single_record_file};
 
 /// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]
@@ -48,7 +48,9 @@ impl Uptime {
 /// ```
 #[inline]
 pub fn get_uptime() -> Result<Uptime, Error> {
-    let mut sc: ScannerAscii<_, 24> = ScannerAscii::scan_path2("/proc/uptime")?;
+    let data = read_single_record_file("/proc/uptime", 64)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let uptime = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let idle_time = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

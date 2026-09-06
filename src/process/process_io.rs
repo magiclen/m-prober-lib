@@ -3,9 +3,12 @@ use std::{
     time::Duration,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::proc_pid_path};
+use crate::{
+    Error,
+    utils::{proc_pid_path, read_single_record_file},
+};
 
 /// The rates computed between two `ProcessIO` instances.
 #[derive(Default, Debug, Clone)]
@@ -93,14 +96,16 @@ impl ProcessIO {
 pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
     let io_path = proc_pid_path(pid).join("io");
 
-    let mut sc: ScannerAscii<_, 192> = ScannerAscii::scan_path2(io_path)?;
+    let data = read_single_record_file(io_path, 256)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let mut process_io = ProcessIO::default();
 
-    while let Some(label) = sc.next_raw()? {
+    while let Some(label) = sc.next()? {
         let value = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        match label.as_slice() {
+        match label {
             b"rchar:" => process_io.rchar = value,
             b"wchar:" => process_io.wchar = value,
             b"syscr:" => process_io.syscr = value,

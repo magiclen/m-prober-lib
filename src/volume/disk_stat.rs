@@ -1,17 +1,15 @@
 use std::{
     collections::HashMap,
-    io::{self, ErrorKind, Read},
+    io::{self, ErrorKind},
     time::Duration,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, volume::VolumeStat};
+use crate::{Error, utils::read_file, volume::VolumeStat};
 
 /// Read the counters that follow the device name in a `/proc/diskstats` line. The line is not consumed to its end, because a caller may want to skip it instead.
-pub(crate) fn read_volume_stat<R: Read, const N: usize>(
-    sc: &mut ScannerAscii<R, N>,
-) -> Result<VolumeStat, Error> {
+pub(crate) fn read_volume_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<VolumeStat, Error> {
     let reads_completed = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     // reads merged
@@ -85,7 +83,9 @@ pub(crate) fn read_volume_stat<R: Read, const N: usize>(
 /// println!("{disk_stats:#?}");
 /// ```
 pub fn get_disk_stats() -> Result<HashMap<String, VolumeStat>, Error> {
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/diskstats")?;
+    let data = read_file("/proc/diskstats", 8192)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let mut disk_stats = HashMap::with_capacity(16);
 
@@ -97,10 +97,9 @@ pub fn get_disk_stats() -> Result<HashMap<String, VolumeStat>, Error> {
 
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        let device = String::from_utf8_lossy(
-            &sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-        )
-        .into_owned();
+        let device =
+            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+                .into_owned();
 
         disk_stats.insert(device, read_volume_stat(&mut sc)?);
 

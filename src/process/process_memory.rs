@@ -1,3 +1,5 @@
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     utils::{parse_number, proc_pid_path, read_single_record_file},
@@ -50,14 +52,19 @@ impl ProcessMemory {
 fn parse_process_memory(data: &[u8]) -> Result<ProcessMemory, Error> {
     let mut memory = ProcessMemory::default();
 
-    // The first line is the address range of the rollup, which carries no counter.
-    for line in data.split(|&b| b == b'\n').skip(1) {
-        let mut tokens = line.split(|b| b.is_ascii_whitespace()).filter(|token| !token.is_empty());
+    let mut sc = ScannerU8SliceAscii::new(data);
 
-        let (Some(label), Some(value)) = (tokens.next(), tokens.next()) else {
+    // The first line is the address range of the rollup, which carries no counter.
+    sc.drop_next_line()?;
+
+    while let Some(line) = sc.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
+
+        let (Some(label), Some(value)) = (sc.next()?, sc.next()?) else {
             continue;
         };
 
+        // A line whose value is not a number is skipped, so a field a later kernel adds cannot fail the parsing.
         let Ok(value) = parse_number::<u64>(value) else {
             continue;
         };

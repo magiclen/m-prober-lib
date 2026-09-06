@@ -4,13 +4,15 @@ use std::{
     mem::take,
 };
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     cpu::cpu_topology::package_topology,
     utils::{parse_number, read_file, read_sysfs_number},
 };
 
-/// One physical CPU package, built from the `processor` blocks of the `/proc/cpuinfo` file that share a `physical id`.
+/// One physical CPU package, built from the `processor` blocks of the `/proc/cpuinfo` file that share a `physical id`. Two instances are equal when their `physical_id` are equal.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -40,6 +42,9 @@ impl PartialEq for CPU {
         self.physical_id.eq(&other.physical_id)
     }
 }
+
+// Only the `physical_id` is compared, which is a full equivalence relation. This cannot be derived, because deriving would demand `Eq` from every field, and `cpus_mhz` holds floats.
+impl Eq for CPU {}
 
 /// The fields of one `processor` block in `/proc/cpuinfo`. Every field is optional because the file differs between platforms.
 #[derive(Default)]
@@ -115,13 +120,23 @@ fn parse_cpuinfo(data: &[u8]) -> Result<CPUInfo, Error> {
 
     let mut block = ProcessorBlock::default();
 
-    for line in data.split(|&b| b == b'\n') {
-        let Some(colon_index) = line.iter().position(|&b| b == b':') else {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
+
+        // A key can hold spaces, e.g. `model name`, so the colon is what ends it.
+        let Some(key) = sc.next_until(":")? else {
             continue;
         };
 
-        let key = line[..colon_index].trim_ascii();
-        let value = line[(colon_index + 1)..].trim_ascii();
+        // The rest of the line is the value, which is taken without scanning it again. A line without a colon leaves nothing here, because reading up to a missing boundary consumes everything.
+        let Some(value) = sc.next_bytes(line.len())? else {
+            continue;
+        };
+
+        let key = key.trim_ascii();
+        let value = value.trim_ascii();
 
         match key {
             b"processor" => {

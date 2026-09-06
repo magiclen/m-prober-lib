@@ -15,7 +15,7 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 [dependencies]
 libc = "0.2"
 scanner-rust = "3"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [features]

@@ -3,7 +3,7 @@
 
 This crate aims to quickly collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, pressure, sensors, batteries, cgroup limits, network interfaces, sockets, routes, block devices, mounts and processes.
 
-It reads the files provided by the kernel (`/proc` and `/sys`) or calls libc directly, so it has no extra runtime dependencies. Linux 5.10 or later is expected.
+It reads the files provided by the kernel (`/proc` and `/sys`) or calls libc directly, so it needs no external tool or daemon and never starts a child process. Linux 5.10 or later is expected.
 
 ## Examples
 

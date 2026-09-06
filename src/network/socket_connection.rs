@@ -5,6 +5,8 @@ use std::{
     str::from_utf8,
 };
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     utils::{parse_number, read_file},
@@ -202,15 +204,20 @@ fn parse_socket_connections(
 ) -> Result<Vec<SocketConnection>, Error> {
     let ipv6 = protocol.is_ipv6();
 
+    let mut lines = ScannerU8SliceAscii::new(data);
+
+    // The first line only names the columns.
+    lines.drop_next_line()?;
+
     let mut connections = Vec::with_capacity(16);
 
-    for line in data.split(|&b| b == b'\n').skip(1) {
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
 
-        // The slot number comes first, and a short line is the trailing empty one.
-        let Some(_) = fields.next() else {
+        // The slot number comes first.
+        if sc.drop_next()?.is_none() {
             continue;
-        };
+        }
 
         let (
             Some(local_address),
@@ -220,15 +227,7 @@ fn parse_socket_connections(
             Some(_timer),
             Some(_retransmit),
             Some(uid),
-        ) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-        )
+        ) = (sc.next()?, sc.next()?, sc.next()?, sc.next()?, sc.next()?, sc.next()?, sc.next()?)
         else {
             continue;
         };
@@ -257,7 +256,9 @@ fn parse_socket_connections(
         let uid = parse_number(uid)?;
 
         // The timeout comes between the UID and the inode.
-        let Some(inode) = fields.nth(1) else {
+        sc.drop_next()?;
+
+        let Some(inode) = sc.next()? else {
             continue;
         };
 

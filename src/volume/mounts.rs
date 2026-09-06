@@ -1,13 +1,16 @@
 use std::{
     collections::HashMap,
-    fs::{self, File},
-    io::{self, ErrorKind, Read},
+    fs,
+    io::{self, ErrorKind},
     os::unix::fs::MetadataExt,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::unescape_octal};
+use crate::{
+    Error,
+    utils::{read_file, unescape_octal},
+};
 
 /// The mount points of one block device, read from the `/proc/mounts` file. [`crate::volume::MountInfo`] is the public superset of this, so this only feeds [`get_volumes`](crate::volume::get_volumes).
 #[derive(Default, Debug, Clone)]
@@ -19,24 +22,24 @@ pub(crate) struct Mount {
 }
 
 /// Parse the lines of `/proc/mounts` whose source starts with `/dev/`. Each entry is the device path, the mount point and the file system type.
-fn parse_mounts<R: Read>(reader: R) -> Result<Vec<(String, String, String)>, Error> {
+fn parse_mounts(data: &[u8]) -> Result<Vec<(String, String, String)>, Error> {
     // Only ASCII whitespace separates the fields, because the kernel escapes it inside the fields as octal sequences.
-    let mut sc: ScannerAscii<R, 1024> = ScannerAscii::new2(reader);
+    let mut sc = ScannerU8SliceAscii::new(data);
 
-    let mut entries = Vec::with_capacity(1);
+    let mut entries = Vec::with_capacity(8);
 
-    while let Some(device_path) = sc.next_raw()? {
+    while let Some(device_path) = sc.next()? {
         if device_path.starts_with(b"/dev/") {
-            let device_path = String::from_utf8_lossy(&unescape_octal(&device_path)).into_owned();
+            let device_path = String::from_utf8_lossy(&unescape_octal(device_path)).into_owned();
 
-            let point = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let point = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
             // A mount point containing a space is written as `\040` in this file.
-            let point = String::from_utf8_lossy(&unescape_octal(&point)).into_owned();
+            let point = String::from_utf8_lossy(&unescape_octal(point)).into_owned();
 
-            let fs_type = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+            let fs_type = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-            let fs_type = String::from_utf8_lossy(&fs_type).into_owned();
+            let fs_type = String::from_utf8_lossy(fs_type).into_owned();
 
             entries.push((device_path, point, fs_type));
         }
@@ -74,7 +77,7 @@ fn resolve_device_name(device_path: &str) -> String {
 
 /// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
 pub(crate) fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
-    let entries = parse_mounts(File::open("/proc/mounts")?)?;
+    let entries = parse_mounts(&read_file("/proc/mounts", 8192)?)?;
 
     let mut mounts: HashMap<String, Mount> = HashMap::with_capacity(entries.len());
 

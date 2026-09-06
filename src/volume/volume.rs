@@ -8,10 +8,11 @@ use std::{
     time::Duration,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
+    utils::read_file,
     volume::{VolumeSpeed, VolumeStat, disk_stat::read_volume_stat, mounts::get_mounts},
 };
 
@@ -110,9 +111,11 @@ fn statvfs(point: &str) -> Option<FsUsage> {
 pub fn get_volumes() -> Result<Vec<Volume>, Error> {
     let mut mounts = get_mounts()?;
 
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/diskstats")?;
+    let data = read_file("/proc/diskstats", 8192)?;
 
-    let mut volumes = Vec::with_capacity(1);
+    let mut sc = ScannerU8SliceAscii::new(&data);
+
+    let mut volumes = Vec::with_capacity(8);
 
     loop {
         if sc.drop_next()?.is_none() {
@@ -121,10 +124,9 @@ pub fn get_volumes() -> Result<Vec<Volume>, Error> {
 
         sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        let device = String::from_utf8_lossy(
-            &sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-        )
-        .into_owned();
+        let device =
+            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+                .into_owned();
 
         if let Some(mount) = mounts.remove(&device) {
             let stat = read_volume_stat(&mut sc)?;

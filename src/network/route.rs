@@ -4,6 +4,8 @@ use std::{
     str::from_utf8,
 };
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     utils::{parse_number, read_file},
@@ -52,10 +54,15 @@ fn parse_hex_ipv4(field: &[u8]) -> Option<Ipv4Addr> {
 
 /// Parse the content of `/proc/net/route`, whose first line only names the columns.
 fn parse_routes(data: &[u8]) -> Result<Vec<Route>, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
+    // The first line only names the columns.
+    lines.drop_next_line()?;
+
     let mut routes = Vec::with_capacity(8);
 
-    for line in data.split(|&b| b == b'\n').skip(1) {
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
 
         let (
             Some(interface),
@@ -67,14 +74,14 @@ fn parse_routes(data: &[u8]) -> Result<Vec<Route>, Error> {
             Some(metric),
             Some(mask),
         ) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
         )
         else {
             continue;
@@ -102,10 +109,12 @@ fn parse_routes(data: &[u8]) -> Result<Vec<Route>, Error> {
 
 /// Parse the content of `/proc/net/ipv6_route`, which has no header line and writes every address as 32 hexadecimal digits.
 fn parse_ipv6_routes(data: &[u8]) -> Result<Vec<Route>, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
     let mut routes = Vec::with_capacity(8);
 
-    for line in data.split(|&b| b == b'\n') {
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
 
         let (
             Some(destination),
@@ -119,16 +128,16 @@ fn parse_ipv6_routes(data: &[u8]) -> Result<Vec<Route>, Error> {
             Some(flags),
             Some(interface),
         ) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
+            sc.next()?,
         )
         else {
             continue;

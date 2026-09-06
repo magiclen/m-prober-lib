@@ -1,8 +1,8 @@
 use std::io::{self, ErrorKind};
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::Error;
+use crate::{Error, utils::read_file};
 
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
@@ -33,12 +33,14 @@ pub struct CPUActivity {
 /// println!("{cpu_activity:#?}");
 /// ```
 pub fn get_cpu_activity() -> Result<CPUActivity, Error> {
-    let mut sc: ScannerAscii<_, 4096> = ScannerAscii::scan_path2("/proc/stat")?;
+    let data = read_file("/proc/stat", 8192)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let mut activity = CPUActivity::default();
 
-    while let Some(label) = sc.next_raw()? {
-        match label.as_slice() {
+    while let Some(label) = sc.next()? {
+        match label {
             b"intr" => {
                 activity.interrupts =
                     sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

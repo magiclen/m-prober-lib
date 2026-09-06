@@ -1,5 +1,7 @@
 use std::io::ErrorKind;
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
     utils::{parse_number, read_file},
@@ -77,14 +79,13 @@ pub struct ProtocolStat {
 
 /// Parse a file that writes a header line of names and then a line of values, both starting with the same protocol label.
 fn parse_protocol_stat(data: &[u8], stat: &mut ProtocolStat) -> Result<(), Error> {
-    let mut lines = data.split(|&b| b == b'\n');
+    let mut lines = ScannerU8SliceAscii::new(data);
 
-    while let (Some(header), Some(values)) = (lines.next(), lines.next()) {
-        let mut names = header.split(|b| b.is_ascii_whitespace()).filter(|token| !token.is_empty());
-        let mut values =
-            values.split(|b| b.is_ascii_whitespace()).filter(|token| !token.is_empty());
+    while let (Some(header), Some(values)) = (lines.next_line()?, lines.next_line()?) {
+        let mut names = ScannerU8SliceAscii::new(header);
+        let mut values = ScannerU8SliceAscii::new(values);
 
-        let (Some(protocol), Some(value_protocol)) = (names.next(), values.next()) else {
+        let (Some(protocol), Some(value_protocol)) = (names.next()?, values.next()?) else {
             continue;
         };
 
@@ -93,7 +94,7 @@ fn parse_protocol_stat(data: &[u8], stat: &mut ProtocolStat) -> Result<(), Error
             continue;
         }
 
-        for (name, value) in names.zip(values) {
+        while let (Some(name), Some(value)) = (names.next()?, values.next()?) {
             // A few counters are signed, e.g. `Tcp: MaxConn` is `-1` when there is no limit.
             let Ok(value) = parse_number::<i64>(value) else {
                 continue;

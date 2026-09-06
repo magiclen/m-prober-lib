@@ -1,8 +1,10 @@
 use std::io::ErrorKind;
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
-    utils::{page_size, parse_number, read_single_record_file},
+    utils::{page_size, read_single_record_file},
 };
 
 /// Socket usage read from the `/proc/net/sockstat` file and the `/proc/net/sockstat6` file, like the `ss -s` command.
@@ -33,16 +35,20 @@ pub struct SocketStat {
 
 /// Parse the lines of `sockstat` or `sockstat6` into `stat`. The memory fields are left in pages.
 fn parse_sockstat(data: &[u8], stat: &mut SocketStat) -> Result<(), Error> {
-    for line in data.split(|&b| b == b'\n') {
-        let mut tokens = line.split(|b| b.is_ascii_whitespace()).filter(|token| !token.is_empty());
+    let mut lines = ScannerU8SliceAscii::new(data);
 
-        let Some(label) = tokens.next() else {
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
+
+        let Some(label) = sc.next()? else {
             continue;
         };
 
         // The rest of the line is key-value pairs like `inuse 43 orphan 0`.
-        while let (Some(key), Some(value)) = (tokens.next(), tokens.next()) {
-            let value: u64 = parse_number(value)?;
+        while let Some(key) = sc.next()? {
+            let Some(value) = sc.next_u64()? else {
+                break;
+            };
 
             match (label, key) {
                 (b"sockets:", b"used") => stat.sockets_used = value,

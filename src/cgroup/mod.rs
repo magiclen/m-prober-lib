@@ -11,41 +11,63 @@ use crate::{
     Error,
     pressure::{Pressure, parse_pressure},
     utils::{
-        parse_cpu_list, parse_number, proc_pid_path, read_file, read_single_record_file,
-        read_sysfs_number, read_sysfs_string,
+        is_single_path_component, parse_cpu_list, parse_number, proc_pid_path, read_file,
+        read_single_record_file, read_sysfs_number, read_sysfs_string,
     },
 };
 
 /// Find the root and the mount point of the cgroup v2 file system in the content of a `mountinfo` file. Only these two fields are extracted, because building every [`crate::volume::MountInfo`] just to find one line would cost far more.
-fn find_cgroup2_mount(data: &[u8]) -> Option<(String, String)> {
-    for line in data.split(|&b| b == b'\n') {
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|f| !f.is_empty());
+fn find_cgroup2_mount(data: &[u8]) -> Result<Option<(String, String)>, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
 
-        // The mount ID, the parent ID and the device numbers come before the root. A line with too few fields is skipped instead of ending the search, because the split always yields an empty last line.
-        let (Some(root), Some(point)) = (fields.nth(3), fields.next()) else {
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
+
+        // The mount ID, the parent ID and the device numbers come before the root. A line with too few fields is skipped instead of ending the search.
+        let (Some(_), Some(_), Some(_), Some(root), Some(point)) =
+            (sc.next()?, sc.next()?, sc.next()?, sc.next()?, sc.next()?)
+        else {
             continue;
         };
 
         // The options and a variable number of optional fields follow, terminated by a single hyphen.
         let mut fs_type = None;
 
-        for field in fields.by_ref() {
+        while let Some(field) = sc.next()? {
             if field == b"-" {
-                fs_type = fields.next();
+                fs_type = sc.next()?;
 
                 break;
             }
         }
 
         if fs_type == Some(b"cgroup2".as_slice()) {
-            return Some((
+            return Ok(Some((
                 String::from_utf8_lossy(root).into_owned(),
                 String::from_utf8_lossy(point).into_owned(),
-            ));
+            )));
         }
     }
 
-    None
+    Ok(None)
+}
+
+/// Join a path from a `/proc/PID/cgroup` file to the mount point of the cgroup file system, after stripping the root of the mount from it. It returns `None` when the path is not inside that root.
+fn join_cgroup_mount(cgroup_path: &str, root: &str, point: &str) -> Option<PathBuf> {
+    let root = root.trim_start_matches('/');
+
+    if root.is_empty() {
+        return Some(Path::new(point).join(cgroup_path));
+    }
+
+    let rest = cgroup_path.strip_prefix(root)?;
+
+    // The prefix only counts when it ends where a path component ends, so that `docker-abcd` is not taken for a path inside `docker-abc`.
+    if !rest.is_empty() && !rest.starts_with('/') {
+        return None;
+    }
+
+    Some(Path::new(point).join(rest.trim_start_matches('/')))
 }
 
 /// Map a path from a `/proc/PID/cgroup` file to the path it has in the mount namespace of the current process.
@@ -61,17 +83,10 @@ fn resolve_cgroup_path(cgroup_path: &str) -> PathBuf {
 
     // The path in `/proc/PID/cgroup` is relative to the cgroup namespace of the process, while the mount only exposes the subtree below its own root, so that prefix has to be stripped. They differ when the cgroup namespace is the host one but the mount is not, e.g. in a container started with `--cgroupns=host`.
     if let Ok(data) = read_file("/proc/self/mountinfo", 8 * 1024)
-        && let Some((root, point)) = find_cgroup2_mount(&data)
+        && let Ok(Some((root, point))) = find_cgroup2_mount(&data)
+        && let Some(path) = join_cgroup_mount(cgroup_path, &root, &point)
     {
-        let root = root.trim_start_matches('/');
-
-        if root.is_empty() {
-            return Path::new(&point).join(cgroup_path);
-        }
-
-        if let Some(rest) = cgroup_path.strip_prefix(root) {
-            return Path::new(&point).join(rest.trim_start_matches('/'));
-        }
+        return path;
     }
 
     direct
@@ -79,8 +94,10 @@ fn resolve_cgroup_path(cgroup_path: &str) -> PathBuf {
 
 /// Find the cgroup v2 line in the content of a `/proc/PID/cgroup` file and resolve it to a path in the mount namespace of the current process.
 fn find_cgroup2_path(data: &[u8]) -> Result<PathBuf, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
     // The cgroup v2 line looks like `0::/user.slice/user-1000.slice`, while a cgroup v1 line has a controller list between the colons instead.
-    for line in data.split(|&b| b == b'\n') {
+    while let Some(line) = lines.next_line()? {
         if let Some(path) = line.strip_prefix(b"0::") {
             let path = String::from_utf8_lossy(path.trim_ascii_end());
 
@@ -143,9 +160,9 @@ pub struct CgroupMemory {
     pub max:          Option<u64>,
     /// The throttling limit in bytes (`memory.high`), above which the cgroup is put under heavy reclaim pressure instead of being killed. It is `None` when there is no limit.
     pub high:         Option<u64>,
-    /// The best-effort protection in bytes (`memory.low`), below which the memory of the cgroup is not reclaimed while another cgroup can be reclaimed instead. It is `None` when the file could not be read, which `0` would otherwise be indistinguishable from.
+    /// The best-effort protection in bytes (`memory.low`), below which the memory of the cgroup is not reclaimed while another cgroup can be reclaimed instead. It is `None` when the protection has no bound, which `0` would otherwise be indistinguishable from.
     pub low:          Option<u64>,
-    /// The hard protection in bytes (`memory.min`), below which the memory of the cgroup is never reclaimed. It is `None` when the file could not be read.
+    /// The hard protection in bytes (`memory.min`), below which the memory of the cgroup is never reclaimed. It is `None` when the protection has no bound.
     pub min:          Option<u64>,
     /// The swap used by the cgroup and its descendants in bytes (`memory.swap.current`). It is `None` when swap accounting is disabled, which is not the same as no swap being used.
     pub swap_current: Option<u64>,
@@ -172,9 +189,10 @@ pub fn get_cgroup_memory<P: AsRef<Path>>(path: P) -> Result<CgroupMemory, Error>
     // `memory.peak` exists since Linux 6.8.
     let peak = read_sysfs_number(path.join("memory.peak")).ok();
 
+    // A protection file holds `max` when everything is protected, which the limit files spell the same way.
     let high = read_limit(path.join("memory.high")).unwrap_or(None);
-    let low = read_sysfs_number(path.join("memory.low")).ok();
-    let min = read_sysfs_number(path.join("memory.min")).ok();
+    let low = read_limit(path.join("memory.low")).unwrap_or(None);
+    let min = read_limit(path.join("memory.min")).unwrap_or(None);
 
     // The swap files do not exist when swap accounting is disabled.
     let swap_current = read_sysfs_number(path.join("memory.swap.current")).ok();
@@ -523,35 +541,35 @@ pub struct CgroupIO {
 
 /// Parse the content of `io.stat`, whose lines look like `259:0 rbytes=1024 wbytes=2048 rios=1 wios=2 dbytes=0 dios=0`.
 fn parse_io_stat(data: &[u8]) -> Result<Vec<CgroupIO>, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
     let mut ios = Vec::with_capacity(1);
 
-    for line in data.split(|&b| b == b'\n') {
-        let mut tokens = line.split(|b| b.is_ascii_whitespace()).filter(|token| !token.is_empty());
+    while let Some(line) = lines.next_line()? {
+        let mut sc = ScannerU8SliceAscii::new(line);
 
-        let Some(device) = tokens.next() else {
+        let Some(device) = sc.next()? else {
             continue;
         };
 
-        let colon_index = device
-            .iter()
-            .position(|&b| b == b':')
-            .ok_or(io::Error::from(ErrorKind::InvalidData))?;
+        // This field looks like `259:0`.
+        let mut device = ScannerU8SliceAscii::new(device);
 
         let mut io = CgroupIO {
-            major: parse_number(&device[..colon_index])?,
-            minor: parse_number(&device[(colon_index + 1)..])?,
+            major: device.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::InvalidData))?,
+            minor: device.next_u32()?.ok_or(io::Error::from(ErrorKind::InvalidData))?,
             ..CgroupIO::default()
         };
 
         // The rest of the line is `key=value` pairs, and a device the kernel has no counter for has none at all.
-        for token in tokens {
-            let Some(equal_index) = token.iter().position(|&b| b == b'=') else {
+        while let Some(token) = sc.next()? {
+            let mut token = ScannerU8SliceAscii::new(token);
+
+            let (Some(key), Some(value)) = (token.next_until("=")?, token.next_u64()?) else {
                 continue;
             };
 
-            let value: u64 = parse_number(&token[(equal_index + 1)..])?;
-
-            match &token[..equal_index] {
+            match key {
                 b"rbytes" => io.read_bytes = value,
                 b"wbytes" => io.write_bytes = value,
                 b"rios" => io.read_ios = value,
@@ -600,12 +618,15 @@ pub fn get_cgroup_pressure<P: AsRef<Path>, S: AsRef<str>>(
 ) -> Result<Pressure, Error> {
     let resource = resource.as_ref();
 
-    // The name must be a single path component.
-    if resource.is_empty() || resource.contains('/') || resource.contains('.') {
+    // The name must be a single path component, and a dot in it would name another file in the same folder.
+    if !is_single_path_component(resource) || resource.contains('.') {
         return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
 
-    parse_pressure(std::fs::File::open(path.as_ref().join(format!("{resource}.pressure")))?)
+    parse_pressure(&read_single_record_file(
+        path.as_ref().join(format!("{resource}.pressure")),
+        256,
+    )?)
 }
 
 /// The CPUs and the NUMA nodes a cgroup may use, read from the `cpuset.*` files.
@@ -673,10 +694,10 @@ truncated
 
         assert_eq!(
             Some((String::from("/subtree"), String::from("/sys/fs/cgroup"))),
-            find_cgroup2_mount(MOUNTINFO)
+            find_cgroup2_mount(MOUNTINFO).unwrap()
         );
 
-        assert_eq!(None, find_cgroup2_mount(b"truncated\n"));
+        assert_eq!(None, find_cgroup2_mount(b"truncated\n").unwrap());
     }
 
     #[test]
@@ -727,7 +748,7 @@ throttled_usec 1500
 
         assert_eq!(
             Some((String::from("/"), String::from("/sys/fs/cgroup"))),
-            find_cgroup2_mount(MOUNT_INFO)
+            find_cgroup2_mount(MOUNT_INFO).unwrap()
         );
 
         // A container started with `--cgroupns=host` only gets its own subtree mounted.
@@ -736,10 +757,47 @@ throttled_usec 1500
 
         assert_eq!(
             Some((String::from("/system.slice/docker-abc.scope"), String::from("/sys/fs/cgroup"))),
-            find_cgroup2_mount(CONTAINER_MOUNT_INFO)
+            find_cgroup2_mount(CONTAINER_MOUNT_INFO).unwrap()
         );
 
-        assert_eq!(None, find_cgroup2_mount(b"27 34 0:24 / /sys rw - sysfs sysfs rw\n"));
+        assert_eq!(None, find_cgroup2_mount(b"27 34 0:24 / /sys rw - sysfs sysfs rw\n").unwrap());
+    }
+
+    #[test]
+    fn join_cgroup_mount_paths() {
+        // A mount at its own root exposes every cgroup, so the path is joined as it is.
+        assert_eq!(
+            Some(PathBuf::from("/sys/fs/cgroup/user.slice")),
+            join_cgroup_mount("user.slice", "/", "/sys/fs/cgroup")
+        );
+
+        // A container started with `--cgroupns=host` only gets its own subtree mounted, so that prefix is stripped.
+        assert_eq!(
+            Some(PathBuf::from("/sys/fs/cgroup")),
+            join_cgroup_mount(
+                "system.slice/docker-abc.scope",
+                "/system.slice/docker-abc.scope",
+                "/sys/fs/cgroup",
+            )
+        );
+        assert_eq!(
+            Some(PathBuf::from("/sys/fs/cgroup/init.scope")),
+            join_cgroup_mount(
+                "system.slice/docker-abc.scope/init.scope",
+                "/system.slice/docker-abc.scope",
+                "/sys/fs/cgroup",
+            )
+        );
+
+        // A cgroup whose name only starts with the root is not inside it.
+        assert_eq!(
+            None,
+            join_cgroup_mount(
+                "system.slice/docker-abcd.scope",
+                "/system.slice/docker-abc.scope",
+                "/sys/fs/cgroup",
+            )
+        );
     }
 
     #[test]

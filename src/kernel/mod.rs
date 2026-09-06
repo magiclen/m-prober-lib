@@ -1,6 +1,6 @@
 use std::io::{self, ErrorKind};
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
@@ -28,7 +28,9 @@ pub struct FileNr {
 /// ```
 #[inline]
 pub fn get_file_nr() -> Result<FileNr, Error> {
-    let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/sys/fs/file-nr")?;
+    let data = read_single_record_file("/proc/sys/fs/file-nr", 64)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let allocated = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
@@ -137,11 +139,13 @@ pub fn get_threads_max() -> Result<u64, Error> {
 pub fn get_kernel_cmdline() -> Result<Vec<String>, Error> {
     let data = read_single_record_file("/proc/cmdline", 1024)?;
 
-    let cmdline = data
-        .split(|b| b.is_ascii_whitespace())
-        .filter(|parameter| !parameter.is_empty())
-        .map(|parameter| String::from_utf8_lossy(parameter).into_owned())
-        .collect();
+    let mut sc = ScannerU8SliceAscii::new(&data);
+
+    let mut cmdline = Vec::new();
+
+    while let Some(parameter) = sc.next()? {
+        cmdline.push(String::from_utf8_lossy(parameter).into_owned());
+    }
 
     Ok(cmdline)
 }

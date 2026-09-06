@@ -1,8 +1,6 @@
-use std::io::Read;
+use scanner_rust::ScannerU8SliceAscii;
 
-use scanner_rust::ScannerAscii;
-
-use crate::Error;
+use crate::{Error, utils::read_single_record_file};
 
 /// The detailed memory information of the `/proc/meminfo` file. Every field is in bytes unless its documentation says otherwise. The fields that depend on a kernel option or on a kernel version are `Option`, and every other field is reported by every kernel this crate supports.
 #[derive(Default, Debug, Clone)]
@@ -80,19 +78,19 @@ pub struct MemInfo {
     pub huge_page_size:     Option<u64>,
 }
 
-fn parse_mem_info<R: Read>(reader: R) -> Result<MemInfo, Error> {
-    let mut sc: ScannerAscii<R, 1024> = ScannerAscii::new2(reader);
+fn parse_mem_info(data: &[u8]) -> Result<MemInfo, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let mut info = MemInfo::default();
 
-    while let Some(label) = sc.next_raw()? {
+    while let Some(label) = sc.next()? {
         // A line without a number cannot exist in this file, but the file may be trimmed in a container, so a missing value only ends the parsing.
         let Some(value) = sc.next_u64()? else {
             break;
         };
 
         // Most values are in kB, but the huge page fields are counts, so they are not scaled.
-        match label.as_slice() {
+        match label {
             b"MemTotal:" => info.total = value * 1024,
             b"MemFree:" => info.free = value * 1024,
             b"MemAvailable:" => info.available = value * 1024,
@@ -148,7 +146,7 @@ fn parse_mem_info<R: Read>(reader: R) -> Result<MemInfo, Error> {
 /// ```
 #[inline]
 pub fn get_mem_info() -> Result<MemInfo, Error> {
-    parse_mem_info(std::fs::File::open("/proc/meminfo")?)
+    parse_mem_info(&read_single_record_file("/proc/meminfo", 2048)?)
 }
 
 #[cfg(test)]

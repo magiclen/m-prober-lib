@@ -1,9 +1,9 @@
 use std::io::{self, ErrorKind};
 
 use chrono::prelude::*;
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::Error;
+use crate::{Error, utils::read_single_record_file};
 
 /// Get the RTC datetime by reading the `/proc/driver/rtc` file. The RTC is normally set to UTC, but the file carries no timezone, so a `NaiveDateTime` is returned. The file only exists when an RTC driver is loaded, which is not the case in most containers.
 ///
@@ -16,7 +16,9 @@ use crate::Error;
 /// ```
 #[inline]
 pub fn get_rtc_date_time() -> Result<NaiveDateTime, Error> {
-    let mut sc: ScannerAscii<_, 64> = ScannerAscii::scan_path2("/proc/driver/rtc")?;
+    let data = read_single_record_file("/proc/driver/rtc", 512)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     // The labels are searched for explicitly, so the order and the width of the fields do not matter.
     sc.drop_next_until("rtc_time")?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

@@ -1,12 +1,12 @@
 use std::{
-    io::{self, ErrorKind, Read},
+    io::{self, ErrorKind},
     thread::sleep,
     time::Duration,
 };
 
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, cpu::CPUTime};
+use crate::{Error, cpu::CPUTime, utils::read_file};
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]
@@ -93,7 +93,7 @@ impl CPUStat {
 
 /// Read the ten time fields that follow a `cpu` label in `/proc/stat`.
 #[inline]
-fn read_cpu_stat<R: Read, const N: usize>(sc: &mut ScannerAscii<R, N>) -> Result<CPUStat, Error> {
+fn read_cpu_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<CPUStat, Error> {
     let user = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let nice = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let system = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
@@ -129,9 +129,11 @@ fn read_cpu_stat<R: Read, const N: usize>(sc: &mut ScannerAscii<R, N>) -> Result
 /// println!("{average_cpu_stat:#?}");
 /// ```
 pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
-    let mut sc: ScannerAscii<_, 72> = ScannerAscii::scan_path2("/proc/stat")?;
+    let data = read_file("/proc/stat", 8192)?;
 
-    let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let mut sc = ScannerU8SliceAscii::new(&data);
+
+    let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
     if label != b"cpu" {
         return Err(io::Error::from(ErrorKind::InvalidData).into());
@@ -150,12 +152,15 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
 /// println!("{all_cpus_stat:#?}");
 /// ```
 pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/stat")?;
+    let data = read_file("/proc/stat", 8192)?;
 
-    let mut cpus_stat = Vec::with_capacity(1);
+    let mut sc = ScannerU8SliceAscii::new(&data);
+
+    // One line per logical processor, which is the usual count on a machine of any size.
+    let mut cpus_stat = Vec::with_capacity(16);
 
     if with_average {
-        let label = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let label = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         if label != b"cpu" {
             return Err(io::Error::from(ErrorKind::InvalidData).into());
@@ -166,7 +171,7 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    while let Some(label) = sc.next_raw()? {
+    while let Some(label) = sc.next()? {
         if !label.starts_with(b"cpu") {
             break;
         }

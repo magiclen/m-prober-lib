@@ -1,8 +1,10 @@
 use std::io::{self, ErrorKind};
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
-    utils::{parse_number, read_file, unescape_octal},
+    utils::{read_file, unescape_octal},
 };
 
 /// One active swap area, read from the `/proc/swaps` file.
@@ -23,27 +25,26 @@ pub struct SwapDevice {
 
 /// Parse the content of `/proc/swaps`, whose first line only names the columns.
 fn parse_swaps(data: &[u8]) -> Result<Vec<SwapDevice>, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
+
+    // The first line only names the columns.
+    sc.drop_next_line()?;
+
     let mut swaps = Vec::with_capacity(1);
 
-    for line in data.split(|&b| b == b'\n').skip(1) {
-        if line.is_empty() {
-            continue;
-        }
+    // The kernel escapes whitespace inside the file name as octal sequences, so whitespace always separates the fields.
+    while let Some(filename) = sc.next()? {
+        let filename = String::from_utf8_lossy(&unescape_octal(filename)).into_owned();
 
-        // The kernel escapes whitespace inside the file name as octal sequences.
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|field| !field.is_empty());
-
-        let mut next_field =
-            || fields.next().ok_or_else(|| io::Error::from(ErrorKind::UnexpectedEof));
-
-        let filename = String::from_utf8_lossy(&unescape_octal(next_field()?)).into_owned();
-        let kind = String::from_utf8_lossy(next_field()?).into_owned();
+        let kind =
+            String::from_utf8_lossy(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+                .into_owned();
 
         // The sizes are in 1024-byte units.
-        let size = parse_number::<u64>(next_field()?)? * 1024;
-        let used = parse_number::<u64>(next_field()?)? * 1024;
+        let size = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
+        let used = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))? * 1024;
 
-        let priority = parse_number(next_field()?)?;
+        let priority = sc.next_i32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         swaps.push(SwapDevice {
             filename,

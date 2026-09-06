@@ -1,8 +1,10 @@
 use std::io::{self, ErrorKind};
 
+use scanner_rust::ScannerU8SliceAscii;
+
 use crate::{
     Error,
-    utils::{parse_number, read_file, unescape_octal},
+    utils::{read_file, unescape_octal},
 };
 
 /// One mount in the mount namespace of a process, read from the `/proc/PID/mountinfo` file.
@@ -53,49 +55,54 @@ impl MountInfo {
     }
 }
 
+/// Read the next field of a `mountinfo` line, which the kernel always writes in full.
+#[inline]
+fn next_field<'a>(sc: &mut ScannerU8SliceAscii<'a>) -> Result<&'a [u8], Error> {
+    Ok(sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?)
+}
+
 /// Parse the content of a `mountinfo` file.
 fn parse_mount_infos(data: &[u8]) -> Result<Vec<MountInfo>, Error> {
+    let mut lines = ScannerU8SliceAscii::new(data);
+
     let mut mount_infos = Vec::with_capacity(16);
 
-    for line in data.split(|&b| b == b'\n') {
+    while let Some(line) = lines.next_line()? {
         if line.is_empty() {
             continue;
         }
 
         // The kernel escapes whitespace inside the fields as octal sequences, so ASCII whitespace always separates the fields.
-        let mut fields = line.split(|b| b.is_ascii_whitespace()).filter(|field| !field.is_empty());
+        let mut sc = ScannerU8SliceAscii::new(line);
 
-        let mut next_field =
-            || fields.next().ok_or_else(|| io::Error::from(ErrorKind::UnexpectedEof));
-
-        let id = parse_number(next_field()?)?;
-        let parent_id = parse_number(next_field()?)?;
+        let id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let parent_id = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         let (major, minor) = {
-            let device = next_field()?;
+            // This field looks like `259:1`.
+            let mut device = ScannerU8SliceAscii::new(next_field(&mut sc)?);
 
-            let colon_index = device
-                .iter()
-                .position(|&b| b == b':')
-                .ok_or(io::Error::from(ErrorKind::InvalidData))?;
+            let major =
+                device.next_u32_until(":")?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
+            let minor = device.next_u32()?.ok_or(io::Error::from(ErrorKind::InvalidData))?;
 
-            (parse_number(&device[..colon_index])?, parse_number(&device[(colon_index + 1)..])?)
+            (major, minor)
         };
 
-        let root = String::from_utf8_lossy(&unescape_octal(next_field()?)).into_owned();
-        let point = String::from_utf8_lossy(&unescape_octal(next_field()?)).into_owned();
-        let options = String::from_utf8_lossy(next_field()?).into_owned();
+        let root = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+        let point = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+        let options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
 
         // A variable number of optional fields follows, terminated by a single hyphen.
         loop {
-            if next_field()? == b"-" {
+            if next_field(&mut sc)? == b"-" {
                 break;
             }
         }
 
-        let fs_type = String::from_utf8_lossy(next_field()?).into_owned();
-        let source = String::from_utf8_lossy(&unescape_octal(next_field()?)).into_owned();
-        let super_options = String::from_utf8_lossy(next_field()?).into_owned();
+        let fs_type = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
+        let source = String::from_utf8_lossy(&unescape_octal(next_field(&mut sc)?)).into_owned();
+        let super_options = String::from_utf8_lossy(next_field(&mut sc)?).into_owned();
 
         mount_infos.push(MountInfo {
             id,

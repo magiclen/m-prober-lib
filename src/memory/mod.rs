@@ -3,18 +3,15 @@ mod numa;
 mod swap_device;
 mod vm_stat;
 
-use std::{
-    fs::File,
-    io::{self, ErrorKind, Read},
-};
+use std::io::{self, ErrorKind};
 
 pub use mem_info::*;
 pub use numa::*;
-use scanner_rust::ScannerAscii;
+use scanner_rust::ScannerU8SliceAscii;
 pub use swap_device::*;
 pub use vm_stat::*;
 
-use crate::Error;
+use crate::{Error, utils::read_single_record_file};
 
 /// Memory information in bytes. The values in `/proc/meminfo` are in kB, so they are multiplied by 1024 here.
 #[derive(Default, Debug, Clone)]
@@ -85,15 +82,15 @@ const USEFUL_ITEMS: [&[u8]; 10] = [
     b"SReclaimable:",
 ];
 
-fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
-    let mut sc: ScannerAscii<R, 768> = ScannerAscii::new2(reader);
+fn parse_meminfo(data: &[u8]) -> Result<Free, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     // The items are looked up by label instead of by position, so neither the order nor the presence of a line matters.
     let mut item_values: [Option<u64>; USEFUL_ITEMS.len()] = [None; USEFUL_ITEMS.len()];
 
     let mut remaining = USEFUL_ITEMS.len();
 
-    while let Some(label) = sc.next_raw()? {
+    while let Some(label) = sc.next()? {
         if let Some(i) = USEFUL_ITEMS.iter().position(|&item| label == item)
             && item_values[i].is_none()
         {
@@ -160,7 +157,7 @@ fn parse_meminfo<R: Read>(reader: R) -> Result<Free, Error> {
 /// ```
 #[inline]
 pub fn free() -> Result<Free, Error> {
-    parse_meminfo(File::open("/proc/meminfo")?)
+    parse_meminfo(&read_single_record_file("/proc/meminfo", 2048)?)
 }
 
 #[cfg(test)]

@@ -1,4 +1,7 @@
-use std::{io, mem::zeroed};
+use std::{
+    io::{self, ErrorKind},
+    mem::zeroed,
+};
 
 use crate::Error;
 
@@ -56,11 +59,51 @@ pub fn get_available_cpu_count() -> Result<usize, Error> {
     // A zero PID means the calling thread.
     let rtn = unsafe { libc::sched_getaffinity(0, size_of::<libc::cpu_set_t>(), &mut set) };
 
-    if rtn != 0 {
-        return Err(io::Error::last_os_error().into());
+    if rtn == 0 {
+        return Ok(unsafe { libc::CPU_COUNT(&set) } as usize);
     }
 
-    let count = unsafe { libc::CPU_COUNT(&set) };
+    let err = io::Error::last_os_error();
 
-    Ok(count as usize)
+    // The kernel rejects a mask that cannot hold every CPU it knows about, which is what happens on a machine with more than the 1024 processors a `cpu_set_t` covers.
+    if err.raw_os_error() != Some(libc::EINVAL) {
+        return Err(err.into());
+    }
+
+    get_available_cpu_count_with_large_mask()
+}
+
+/// Ask for the affinity mask again with a buffer that keeps doubling until the kernel accepts it. Only a machine with more processors than a `cpu_set_t` can hold reaches this.
+#[cold]
+fn get_available_cpu_count_with_large_mask() -> Result<usize, Error> {
+    // This covers far more processors than any kernel supports, so the loop always ends.
+    const MAX_WORDS: usize = 16 * 1024;
+
+    let mut words = size_of::<libc::cpu_set_t>() / size_of::<libc::c_ulong>();
+
+    loop {
+        words *= 2;
+
+        if words > MAX_WORDS {
+            return Err(io::Error::from(ErrorKind::InvalidData).into());
+        }
+
+        let mut mask: Vec<libc::c_ulong> = vec![0; words];
+
+        let size = words * size_of::<libc::c_ulong>();
+
+        let rtn =
+            unsafe { libc::sched_getaffinity(0, size, mask.as_mut_ptr() as *mut libc::cpu_set_t) };
+
+        if rtn == 0 {
+            // The kernel writes the mask as an array of `unsigned long`, so adding up the bits of every word gives what `CPU_COUNT` would.
+            return Ok(mask.iter().map(|word| word.count_ones() as usize).sum());
+        }
+
+        let err = io::Error::last_os_error();
+
+        if err.raw_os_error() != Some(libc::EINVAL) {
+            return Err(err.into());
+        }
+    }
 }
