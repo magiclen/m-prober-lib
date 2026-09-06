@@ -2,7 +2,7 @@
 #[derive(Default, Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CPUTime {
-    /// `user + nice + system + irq + softirq + steal`
+    /// `user + nice + system + irq + softirq + steal`. The kernel already counts `guest` inside `user` and `guest_nice` inside `nice`, so adding those two here would count the time a guest ran twice.
     pub non_idle: u64,
     /// `idle + iowait`
     pub idle:     u64,

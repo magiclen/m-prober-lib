@@ -40,7 +40,7 @@ pub struct Process {
     pub state:              ProcessState,
     /// The ID of the parent process.
     pub ppid:               u32,
-    /// The program name, which is the `comm` field of the `/proc/PID/stat` file.
+    /// The program name, which is the `comm` field of the `/proc/PID/stat` file. The kernel stores it in `TASK_COMM_LEN` bytes, so it is at most 15 characters long and a longer executable name is cut short; `cmdline` and `exe` carry the full name. A thread that renamed itself (e.g. with `prctl(PR_SET_NAME)`) reports that name instead of the executable.
     pub program:            String,
     /// The command line with its NUL separators replaced by spaces. It is empty for a kernel thread.
     pub cmdline:            String,

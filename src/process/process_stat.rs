@@ -18,7 +18,7 @@ use crate::{
 pub struct ProcessStat {
     /// The state of the process.
     pub state:        ProcessState,
-    /// The file name of the executable, without the surrounding parentheses. It may contain spaces.
+    /// The file name of the executable, without the surrounding parentheses. It may contain spaces. The kernel stores it in `TASK_COMM_LEN` bytes, so it is at most 15 characters long and a longer name is cut short; read `/proc/PID/cmdline` or the `exe` link for the full one.
     pub comm:         String,
     /// The PID of the parent process.
     pub ppid:         u32,
