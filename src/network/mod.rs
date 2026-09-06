@@ -1,4 +1,10 @@
+mod network_address;
+mod network_info;
 mod network_stat;
+mod protocol_stat;
+mod route;
+mod socket_connection;
+mod socket_stat;
 
 use std::{
     collections::HashSet,
@@ -8,8 +14,14 @@ use std::{
     time::Duration,
 };
 
+pub use network_address::*;
+pub use network_info::*;
 pub use network_stat::*;
+pub use protocol_stat::*;
+pub use route::*;
 use scanner_rust::ScannerU8SliceAscii;
+pub use socket_connection::*;
+pub use socket_stat::*;
 
 use crate::{Error, utils::read_file};
 

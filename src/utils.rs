@@ -103,6 +103,12 @@ pub(crate) fn proc_pid_path(pid: u32) -> PathBuf {
     Path::new("/proc").join(pid.to_string())
 }
 
+/// Check that a name from the caller is a single path component, so that it cannot escape the folder it is joined to.
+#[inline]
+pub(crate) fn is_single_path_component(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains('/')
+}
+
 // Every text file of `/proc` and `/sys` is read into a buffer by one of the two functions below and then parsed with a `ScannerU8SliceAscii`, whose tokens borrow from that buffer instead of being allocated one by one. Splitting bytes by hand is only kept where the input is not a series of whitespace-separated tokens, e.g. `unescape_octal`, `parse_cpu_list` and the hexadecimal addresses of the socket files.
 
 /// Read a whole file into a `Vec` with a pre-allocated capacity. Multi-record files in `/proc` (e.g. `/proc/cpuinfo`) return at most one page per read, so this reads until EOF.
