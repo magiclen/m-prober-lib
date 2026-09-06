@@ -20,7 +20,7 @@ use crate::{
         },
         process_status::read_process_status,
     },
-    utils::{clock_ticks_to_duration, proc_pid_path},
+    utils::{clock_ticks_to_duration, proc_pid_path, read_single_record_file_into},
 };
 
 /// The names of the terminal devices that were already looked up in one scan. Every lookup is a `readlink` in sysfs, and a machine full of processes normally has only a handful of terminals.
@@ -94,20 +94,12 @@ enum ProcessProbe {
 }
 
 /// Convert the content of `/proc/PID/cmdline` to a string with the arguments separated by spaces.
-fn cmdline_to_string(mut data: Vec<u8>) -> String {
+fn cmdline_to_string(data: &[u8]) -> String {
     // Every argument ends with a NUL, so the last one is dropped instead of becoming a trailing space.
-    if data.last() == Some(&0) {
-        data.pop();
-    }
-
-    for e in data.iter_mut() {
-        if *e == 0 {
-            *e = b' ';
-        }
-    }
+    let data = data.strip_suffix(b"\0").unwrap_or(data);
 
     // Command line arguments are arbitrary bytes, so they may not be valid UTF-8.
-    String::from_utf8_lossy(&data).into_owned()
+    String::from_utf8_lossy(data).replace('\0', " ")
 }
 
 /// Get the name of a terminal device from its major and minor numbers, e.g. `pts/0` or `ttyS0`.
@@ -143,17 +135,16 @@ fn is_process_unreadable(err: &Error) -> bool {
     }
 }
 
-fn get_process_with_stat_inner<P: AsRef<Path>>(
+fn get_process_with_stat_inner(
     pid: u32,
-    process_path: P,
+    process_path: &Path,
     process_filter: &ProcessFilter,
     btime: DateTime<Utc>,
     tty_cache: &mut TtyCache,
+    buffer: &mut Vec<u8>,
 ) -> Result<ProcessProbe, Error> {
-    let process_path = process_path.as_ref();
-
     // Only the IDs and the swap size are used here, and both come before the `Threads:` line.
-    let status = read_process_status(pid, true)?;
+    let status = read_process_status(process_path, true, buffer)?;
 
     let uid_filtered = process_filter.uid_filter.is_some_and(|uid_filter| {
         status.real_uid != uid_filter
@@ -173,18 +164,21 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let record_ppid = process_filter.pid_filter.is_some();
 
     if uid_filtered || gid_filtered {
-        let ppid = if record_ppid { Some(get_process_ppid(pid)?) } else { None };
+        let ppid = if record_ppid { Some(get_process_ppid(process_path, buffer)?) } else { None };
 
         return Ok(ProcessProbe::Filtered(ppid));
     }
 
-    let cmdline = cmdline_to_string(fs::read(process_path.join("cmdline"))?);
+    // The kernel writes the whole command line in one record, and a longer one is still read completely.
+    read_single_record_file_into(process_path.join("cmdline"), 512, buffer)?;
+
+    let cmdline = cmdline_to_string(buffer);
 
     let program_filter_match =
         process_filter.program_filter.is_none_or(|program_filter| program_filter(&cmdline));
 
     // The memory fields live in a separate file, which a process that is dropped right here does not need.
-    let mut stat = get_process_stat_without_memory(pid)?;
+    let mut stat = get_process_stat_without_memory(process_path, buffer)?;
 
     if !program_filter_match
         && let Some(program_filter) = process_filter.program_filter
@@ -219,7 +213,7 @@ fn get_process_with_stat_inner<P: AsRef<Path>>(
     let exe = fs::read_link(process_path.join("exe")).ok();
 
     // The process survived every filter, so the memory fields are worth the extra read now.
-    read_process_statm_file(pid, &mut stat)?;
+    read_process_statm_file(process_path, &mut stat, buffer)?;
 
     let priority = stat.priority;
     let real_time_priority = if stat.rt_priority > 0 { Some(stat.rt_priority) } else { None };
@@ -274,12 +268,15 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> 
 
     let mut tty_cache = TtyCache::new();
 
+    let mut buffer = Vec::new();
+
     match get_process_with_stat_inner(
         pid,
-        process_path,
+        &process_path,
         &ProcessFilter::default(),
         get_btime(),
         &mut tty_cache,
+        &mut buffer,
     )? {
         ProcessProbe::Matched(process, stat) => Ok((process, stat)),
         ProcessProbe::Filtered(_) => unreachable!("the default filter matches every process"),
@@ -357,6 +354,9 @@ pub fn get_processes_with_stat(
 
     let mut tty_cache = TtyCache::new();
 
+    // Every file of every process is read into this one buffer, which keeps the scan from allocating and zeroing a new one for each of them.
+    let mut buffer = Vec::new();
+
     for dir_entry in Path::new("/proc").read_dir()? {
         let dir_entry = dir_entry?;
 
@@ -366,10 +366,11 @@ pub fn get_processes_with_stat(
 
         match get_process_with_stat_inner(
             pid,
-            dir_entry.path(),
+            &dir_entry.path(),
             process_filter,
             btime,
             &mut tty_cache,
+            &mut buffer,
         ) {
             Ok(ProcessProbe::Matched(process, stat)) => {
                 if process_filter.pid_filter.is_some() {
@@ -461,11 +462,11 @@ mod tests {
 
     #[test]
     fn cmdline_to_string_drops_trailing_nul() {
-        assert_eq!("sleep 100", cmdline_to_string(b"sleep\x00100\x00".to_vec()));
-        assert_eq!("", cmdline_to_string(Vec::new()));
+        assert_eq!("sleep 100", cmdline_to_string(b"sleep\x00100\x00"));
+        assert_eq!("", cmdline_to_string(b""));
 
         // A process that rewrote its argv may leave no trailing NUL.
-        assert_eq!("postgres: writer", cmdline_to_string(b"postgres: writer".to_vec()));
+        assert_eq!("postgres: writer", cmdline_to_string(b"postgres: writer"));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use std::{
     io::{self, ErrorKind},
+    path::Path,
     str::from_utf8,
 };
 
@@ -8,7 +9,7 @@ use scanner_rust::ScannerU8SliceAscii;
 use crate::{
     Error,
     process::{ProcessState, SchedulingPolicy},
-    utils::{page_size, proc_pid_path, read_single_record_file},
+    utils::{page_size, proc_pid_path, read_single_record_file_into},
 };
 
 /// Fields read from the `/proc/PID/stat` file and the `/proc/PID/statm` file. Time fields are in `USER_HZ` clock ticks and memory fields are in bytes.
@@ -69,12 +70,13 @@ pub struct ProcessStat {
     pub rss_anon:     u64,
 }
 
-/// Read the whole `/proc/PID/stat` file, which is always a single line.
+/// Read the whole `/proc/PID/stat` file, which is always a single line, into `buffer`. The folder of the process and the buffer are passed in, so that a caller which reads several files of one process builds the path and allocates the buffer only once.
 #[inline]
-pub(crate) fn read_process_stat_file(pid: u32) -> Result<Vec<u8>, Error> {
-    let stat_path = proc_pid_path(pid).join("stat");
-
-    Ok(read_single_record_file(stat_path, 1024)?)
+pub(crate) fn read_process_stat_file(
+    process_path: &Path,
+    buffer: &mut Vec<u8>,
+) -> Result<(), Error> {
+    Ok(read_single_record_file_into(process_path.join("stat"), 1024, buffer)?)
 }
 
 /// Split a `/proc/PID/stat` line into the `comm` part and the fields after it.
@@ -93,10 +95,10 @@ pub(crate) fn split_process_stat_line(line: &[u8]) -> Result<(&[u8], &[u8]), Err
 }
 
 /// Get only the parent PID of a process by reading the `/proc/PID/stat` file.
-pub(crate) fn get_process_ppid(pid: u32) -> Result<u32, Error> {
-    let line = read_process_stat_file(pid)?;
+pub(crate) fn get_process_ppid(process_path: &Path, buffer: &mut Vec<u8>) -> Result<u32, Error> {
+    read_process_stat_file(process_path, buffer)?;
 
-    let (_, fields) = split_process_stat_line(&line)?;
+    let (_, fields) = split_process_stat_line(buffer)?;
 
     let mut sc = ScannerU8SliceAscii::new(fields);
 
@@ -198,29 +200,38 @@ pub(crate) fn parse_process_stat(line: &[u8]) -> Result<ProcessStat, Error> {
 /// println!("{process_stat:#?}");
 /// ```
 pub fn get_process_stat(pid: u32) -> Result<ProcessStat, Error> {
-    let mut stat = get_process_stat_without_memory(pid)?;
+    let process_path = proc_pid_path(pid);
 
-    read_process_statm_file(pid, &mut stat)?;
+    let mut buffer = Vec::new();
+
+    let mut stat = get_process_stat_without_memory(&process_path, &mut buffer)?;
+
+    read_process_statm_file(&process_path, &mut stat, &mut buffer)?;
 
     Ok(stat)
 }
 
 /// Get the stat of a process without the memory fields, which live in a separate file. A caller that may drop the process right away saves one `open` and one `read` this way.
 #[inline]
-pub(crate) fn get_process_stat_without_memory(pid: u32) -> Result<ProcessStat, Error> {
-    let line = read_process_stat_file(pid)?;
+pub(crate) fn get_process_stat_without_memory(
+    process_path: &Path,
+    buffer: &mut Vec<u8>,
+) -> Result<ProcessStat, Error> {
+    read_process_stat_file(process_path, buffer)?;
 
-    parse_process_stat(&line)
+    parse_process_stat(buffer)
 }
 
 /// Fill the memory fields of a stat by reading the `/proc/PID/statm` file. They come from there instead of from the `stat` file, so that `rss` and `shared` are consistent with each other.
-pub(crate) fn read_process_statm_file(pid: u32, stat: &mut ProcessStat) -> Result<(), Error> {
-    let statm_path = proc_pid_path(pid).join("statm");
-
+pub(crate) fn read_process_statm_file(
+    process_path: &Path,
+    stat: &mut ProcessStat,
+    buffer: &mut Vec<u8>,
+) -> Result<(), Error> {
     // The file is seven small numbers, so it always fits into one read.
-    let statm = read_single_record_file(statm_path, 64)?;
+    read_single_record_file_into(process_path.join("statm"), 64, buffer)?;
 
-    let mut sc = ScannerU8SliceAscii::new(&statm);
+    let mut sc = ScannerU8SliceAscii::new(buffer);
 
     sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 

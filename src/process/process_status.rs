@@ -1,10 +1,13 @@
-use std::io::{self, ErrorKind};
+use std::{
+    io::{self, ErrorKind},
+    path::Path,
+};
 
 use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
     Error,
-    utils::{proc_pid_path, read_single_record_file},
+    utils::{proc_pid_path, read_single_record_file_into},
 };
 
 /// Fields read from the `/proc/PID/status` file. Memory fields are in bytes.
@@ -102,17 +105,21 @@ fn parse_process_status(data: &[u8], stop_at_threads: bool) -> Result<ProcessSta
 /// println!("{process_status:#?}");
 /// ```
 pub fn get_process_status(pid: u32) -> Result<ProcessStatus, Error> {
-    read_process_status(pid, false)
+    let mut buffer = Vec::new();
+
+    read_process_status(&proc_pid_path(pid), false, &mut buffer)
 }
 
-/// Read a `/proc/PID/status` file. The context switch counters are the last two lines of the file, so a caller that does not need them can skip the second half of the parsing.
-pub(crate) fn read_process_status(pid: u32, stop_at_threads: bool) -> Result<ProcessStatus, Error> {
-    let status_path = proc_pid_path(pid).join("status");
-
+/// Read a `/proc/PID/status` file. The context switch counters are the last two lines of the file, so a caller that does not need them can skip the second half of the parsing. The folder of the process and the buffer are passed in, so that a caller which reads several files of one process builds the path and allocates the buffer only once.
+pub(crate) fn read_process_status(
+    process_path: &Path,
+    stop_at_threads: bool,
+    buffer: &mut Vec<u8>,
+) -> Result<ProcessStatus, Error> {
     // The kernel generates the whole file at once and it is about 1.5 KB, so one read normally gets everything.
-    let data = read_single_record_file(status_path, 2048)?;
+    read_single_record_file_into(process_path.join("status"), 2048, buffer)?;
 
-    parse_process_status(&data, stop_at_threads)
+    parse_process_status(buffer, stop_at_threads)
 }
 
 #[cfg(test)]

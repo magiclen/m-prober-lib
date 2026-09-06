@@ -2,7 +2,7 @@ use std::io::{self, ErrorKind};
 
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, utils::read_file};
+use crate::{Error, cpu::proc_stat_capacity, utils::read_file};
 
 /// System-wide scheduler counters read from the `/proc/stat` file.
 #[allow(clippy::upper_case_acronyms)]
@@ -33,7 +33,8 @@ pub struct CPUActivity {
 /// println!("{cpu_activity:#?}");
 /// ```
 pub fn get_cpu_activity() -> Result<CPUActivity, Error> {
-    let data = read_file("/proc/stat", 8192)?;
+    // The `softirq` line this needs is the last one, so the whole file is read.
+    let data = read_file("/proc/stat", proc_stat_capacity())?;
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 

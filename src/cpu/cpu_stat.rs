@@ -6,7 +6,11 @@ use std::{
 
 use scanner_rust::ScannerU8SliceAscii;
 
-use crate::{Error, cpu::CPUTime, utils::read_file};
+use crate::{
+    Error,
+    cpu::{CPUTime, proc_stat_capacity},
+    utils::{read_file, read_file_head},
+};
 
 /// CPU times in `USER_HZ` clock ticks, read from the `cpu` lines of `/proc/stat`.
 #[derive(Default, Debug, Clone)]
@@ -129,7 +133,8 @@ fn read_cpu_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<CPUStat, Error> {
 /// println!("{average_cpu_stat:#?}");
 /// ```
 pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
-    let data = read_file("/proc/stat", 8192)?;
+    // The `cpu` label and its ten fields cannot fill this buffer, so reading only the head keeps the per-processor lines and the interrupt counters that follow out of it.
+    let data = read_file_head("/proc/stat", 384)?;
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 
@@ -152,7 +157,7 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
 /// println!("{all_cpus_stat:#?}");
 /// ```
 pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
-    let data = read_file("/proc/stat", 8192)?;
+    let data = read_file("/proc/stat", proc_stat_capacity())?;
 
     let mut sc = ScannerU8SliceAscii::new(&data);
 

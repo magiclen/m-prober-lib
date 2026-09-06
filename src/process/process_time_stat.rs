@@ -8,6 +8,7 @@ use crate::{
         ProcessStat,
         process_stat::{read_process_stat_file, split_process_stat_line},
     },
+    utils::proc_pid_path,
 };
 
 /// CPU times of a process in `USER_HZ` clock ticks.
@@ -115,9 +116,11 @@ fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, Error> {
 /// ```
 #[inline]
 pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, Error> {
-    let line = read_process_stat_file(pid)?;
+    let mut buffer = Vec::new();
 
-    parse_process_time_stat(&line)
+    read_process_stat_file(&proc_pid_path(pid), &mut buffer)?;
+
+    parse_process_time_stat(&buffer)
 }
 
 #[cfg(test)]

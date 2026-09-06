@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     fs::File,
     io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
@@ -18,10 +19,10 @@ where
     Ok(s.parse::<T>()?)
 }
 
-/// Decode the octal escape sequences that the kernel writes in `/proc/mounts` and `/proc/self/mountinfo`, such as `\040` for a space.
-pub(crate) fn unescape_octal(data: &[u8]) -> Vec<u8> {
+/// Decode the octal escape sequences that the kernel writes in `/proc/mounts` and `/proc/self/mountinfo`, such as `\040` for a space. Almost no field holds one, so a field without a backslash is borrowed instead of copied.
+pub(crate) fn unescape_octal(data: &[u8]) -> Cow<'_, [u8]> {
     if !data.contains(&b'\\') {
-        return data.to_vec();
+        return Cow::Borrowed(data);
     }
 
     let mut result = Vec::with_capacity(data.len());
@@ -50,7 +51,7 @@ pub(crate) fn unescape_octal(data: &[u8]) -> Vec<u8> {
         i += 1;
     }
 
-    result
+    Cow::Owned(result)
 }
 
 /// Parse a CPU list like `0-3,8`, which is the format sysfs uses for `cpulist` and `cpuset.cpus`.
@@ -135,26 +136,55 @@ pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<
     Ok(buffer)
 }
 
+/// Read the beginning of a file with a single read, without going on to its end. This is for a file whose first line is all the caller needs, e.g. the `cpu` line of `/proc/stat`, which the kernel follows with one line per processor and hundreds of interrupt counters.
+#[inline]
+pub(crate) fn read_file_head<P: AsRef<Path>>(path: P, max: usize) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+
+    let mut buffer = vec![0u8; max];
+
+    let size = file.read(&mut buffer)?;
+
+    buffer.truncate(size);
+
+    Ok(buffer)
+}
+
 /// Read a file that the kernel generates as a single record (e.g. `/proc/PID/stat` or a sysfs attribute). Such a file is returned completely by one read when it fits into `capacity` bytes, so the extra read for EOF is skipped. A larger file is still read completely.
 #[inline]
 pub(crate) fn read_single_record_file<P: AsRef<Path>>(
     path: P,
     capacity: usize,
 ) -> io::Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+
+    read_single_record_file_into(path, capacity, &mut buffer)?;
+
+    Ok(buffer)
+}
+
+/// Read a single-record file into a buffer the caller owns, which is left holding exactly the content. A caller that reads one such file per process keeps one buffer for the whole scan this way, instead of allocating and zeroing a new one every time.
+#[inline]
+pub(crate) fn read_single_record_file_into<P: AsRef<Path>>(
+    path: P,
+    capacity: usize,
+    buffer: &mut Vec<u8>,
+) -> io::Result<()> {
     let mut file = File::open(path)?;
 
-    let mut buffer = vec![0u8; capacity];
+    buffer.clear();
+    buffer.resize(capacity, 0);
 
-    let size = file.read(&mut buffer)?;
+    let size = file.read(buffer)?;
 
     if size == capacity {
         // The record may be larger than the buffer, so the rest is read in the usual way.
-        file.read_to_end(&mut buffer)?;
+        file.read_to_end(buffer)?;
     } else {
         buffer.truncate(size);
     }
 
-    Ok(buffer)
+    Ok(())
 }
 
 /// Call `uname(2)` and return the raw struct.
@@ -224,13 +254,16 @@ mod tests {
 
     #[test]
     fn unescape_octal_sequences() {
-        assert_eq!(b"/mnt/my disk".to_vec(), unescape_octal(b"/mnt/my\\040disk"));
-        assert_eq!(b"/mnt/a\tb".to_vec(), unescape_octal(b"/mnt/a\\011b"));
-        assert_eq!(b"/mnt/a\\b".to_vec(), unescape_octal(b"/mnt/a\\134b"));
-        assert_eq!(b"/mnt/plain".to_vec(), unescape_octal(b"/mnt/plain"));
+        assert_eq!(b"/mnt/my disk".as_slice(), &*unescape_octal(b"/mnt/my\\040disk"));
+        assert_eq!(b"/mnt/a\tb".as_slice(), &*unescape_octal(b"/mnt/a\\011b"));
+        assert_eq!(b"/mnt/a\\b".as_slice(), &*unescape_octal(b"/mnt/a\\134b"));
+        assert_eq!(b"/mnt/plain".as_slice(), &*unescape_octal(b"/mnt/plain"));
 
         // An incomplete or non-octal sequence is kept as it is.
-        assert_eq!(b"/mnt/a\\09b".to_vec(), unescape_octal(b"/mnt/a\\09b"));
-        assert_eq!(b"/mnt/a\\04".to_vec(), unescape_octal(b"/mnt/a\\04"));
+        assert_eq!(b"/mnt/a\\09b".as_slice(), &*unescape_octal(b"/mnt/a\\09b"));
+        assert_eq!(b"/mnt/a\\04".as_slice(), &*unescape_octal(b"/mnt/a\\04"));
+
+        // A field without a backslash is borrowed instead of copied.
+        assert!(matches!(unescape_octal(b"/mnt/plain"), Cow::Borrowed(_)));
     }
 }
