@@ -17,20 +17,9 @@ pub struct FileNr {
     pub max:       u64,
 }
 
-/// Get the system-wide file handle usage by reading the `/proc/sys/fs/file-nr` file.
-///
-/// ```rust
-/// use mprober_lib::kernel;
-///
-/// let file_nr = kernel::get_file_nr().unwrap();
-///
-/// println!("{file_nr:#?}");
-/// ```
-#[inline]
-pub fn get_file_nr() -> Result<FileNr, Error> {
-    let data = read_single_record_file("/proc/sys/fs/file-nr", 64)?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+/// Parse the content of `/proc/sys/fs/file-nr`, which is three numbers on one line.
+fn parse_file_nr(data: &[u8]) -> Result<FileNr, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let allocated = sc.next_u64()?.or_eof()?;
 
@@ -43,6 +32,20 @@ pub fn get_file_nr() -> Result<FileNr, Error> {
         allocated,
         max,
     })
+}
+
+/// Get the system-wide file handle usage by reading the `/proc/sys/fs/file-nr` file.
+///
+/// ```rust
+/// use mprober_lib::kernel;
+///
+/// let file_nr = kernel::get_file_nr().unwrap();
+///
+/// println!("{file_nr:#?}");
+/// ```
+#[inline]
+pub fn get_file_nr() -> Result<FileNr, Error> {
+    parse_file_nr(&read_single_record_file("/proc/sys/fs/file-nr", 64)?)
 }
 
 /// The fields that the `uname` function in libc reports.
@@ -264,6 +267,14 @@ pub fn get_kernel_taint_reasons(tainted: u64) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_file_handles() {
+        let file_nr = parse_file_nr(b"9280\t0\t9223372036854775807\n".as_slice()).unwrap();
+
+        assert_eq!(9280, file_nr.allocated);
+        assert_eq!(9223372036854775807, file_nr.max);
+    }
 
     #[test]
     fn split_cmdline() {

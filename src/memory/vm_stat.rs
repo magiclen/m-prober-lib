@@ -23,21 +23,10 @@ pub struct VmStat {
     pub major_page_faults: u64,
 }
 
-/// Get paging counters like the `vmstat` command by reading the `/proc/vmstat` file.
-///
-/// ```rust
-/// use mprober_lib::memory;
-///
-/// let vm_stat = memory::get_vm_stat().unwrap();
-///
-/// println!("{vm_stat:#?}");
-/// ```
-pub fn get_vm_stat() -> Result<VmStat, Error> {
+fn parse_vm_stat(data: &[u8]) -> Result<VmStat, Error> {
     const USEFUL_ITEMS_COUNT: usize = 6;
 
-    let data = read_file("/proc/vmstat", 8192)?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let mut vm_stat = VmStat::default();
 
@@ -65,4 +54,47 @@ pub fn get_vm_stat() -> Result<VmStat, Error> {
     }
 
     Ok(vm_stat)
+}
+
+/// Get paging counters like the `vmstat` command by reading the `/proc/vmstat` file.
+///
+/// ```rust
+/// use mprober_lib::memory;
+///
+/// let vm_stat = memory::get_vm_stat().unwrap();
+///
+/// println!("{vm_stat:#?}");
+/// ```
+#[inline]
+pub fn get_vm_stat() -> Result<VmStat, Error> {
+    parse_vm_stat(&read_file("/proc/vmstat", 8192)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VMSTAT: &[u8] = b"nr_free_pages 10902097
+nr_zone_inactive_anon 6612
+pgpgin 12885269
+pgpgout 27766772
+pswpin 12
+pswpout 34
+pgalloc_dma 0
+pgfault 264080294
+pgmajfault 78516
+pgsteal_kswapd 0
+";
+
+    #[test]
+    fn parse() {
+        let vm_stat = parse_vm_stat(VMSTAT).unwrap();
+
+        assert_eq!(12885269, vm_stat.pages_in);
+        assert_eq!(27766772, vm_stat.pages_out);
+        assert_eq!(12, vm_stat.swap_in);
+        assert_eq!(34, vm_stat.swap_out);
+        assert_eq!(264080294, vm_stat.page_faults);
+        assert_eq!(78516, vm_stat.major_page_faults);
+    }
 }

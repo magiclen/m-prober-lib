@@ -23,20 +23,8 @@ pub struct LoadAverage {
     pub last_pid:         u32,
 }
 
-/// Get the load average by reading the `/proc/loadavg` file.
-///
-/// ```rust
-/// use mprober_lib::load_average;
-///
-/// let load_average = load_average::get_load_average().unwrap();
-///
-/// println!("{load_average:#?}");
-/// ```
-#[inline]
-pub fn get_load_average() -> Result<LoadAverage, Error> {
-    let data = read_single_record_file("/proc/loadavg", 64)?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+fn parse_load_average(data: &[u8]) -> Result<LoadAverage, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let one = sc.next_f64()?.or_eof()?;
     let five = sc.next_f64()?.or_eof()?;
@@ -58,4 +46,39 @@ pub fn get_load_average() -> Result<LoadAverage, Error> {
         total_entities,
         last_pid,
     })
+}
+
+/// Get the load average by reading the `/proc/loadavg` file.
+///
+/// ```rust
+/// use mprober_lib::load_average;
+///
+/// let load_average = load_average::get_load_average().unwrap();
+///
+/// println!("{load_average:#?}");
+/// ```
+#[inline]
+pub fn get_load_average() -> Result<LoadAverage, Error> {
+    parse_load_average(&read_single_record_file("/proc/loadavg", 64)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse() {
+        let load_average =
+            parse_load_average(b"1.23 0.45 0.06 2/2789 123456\n".as_slice()).unwrap();
+
+        assert_eq!(1.23, load_average.one);
+        assert_eq!(0.45, load_average.five);
+        assert_eq!(0.06, load_average.fifteen);
+
+        // The fourth field packs two numbers as `running/total`.
+        assert_eq!(2, load_average.running_entities);
+        assert_eq!(2789, load_average.total_entities);
+
+        assert_eq!(123456, load_average.last_pid);
+    }
 }

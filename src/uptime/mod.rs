@@ -37,6 +37,18 @@ impl Uptime {
     }
 }
 
+fn parse_uptime(data: &[u8]) -> Result<Uptime, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
+
+    let uptime = sc.next_f64()?.or_eof()?;
+    let idle_time = sc.next_f64()?.or_eof()?;
+
+    Ok(Uptime {
+        total_uptime:      Duration::from_secs_f64(uptime),
+        all_cpu_idle_time: Duration::from_secs_f64(idle_time),
+    })
+}
+
 /// Get the uptime by reading the `/proc/uptime` file.
 ///
 /// ```rust
@@ -48,15 +60,20 @@ impl Uptime {
 /// ```
 #[inline]
 pub fn get_uptime() -> Result<Uptime, Error> {
-    let data = read_single_record_file("/proc/uptime", 64)?;
+    parse_uptime(&read_single_record_file("/proc/uptime", 64)?)
+}
 
-    let mut sc = ScannerU8SliceAscii::new(&data);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let uptime = sc.next_f64()?.or_eof()?;
-    let idle_time = sc.next_f64()?.or_eof()?;
+    #[test]
+    fn parse() {
+        let uptime = parse_uptime(b"57990.61 1381406.75\n".as_slice()).unwrap();
 
-    Ok(Uptime {
-        total_uptime:      Duration::from_secs_f64(uptime),
-        all_cpu_idle_time: Duration::from_secs_f64(idle_time),
-    })
+        assert_eq!(Duration::from_secs_f64(57990.61), uptime.total_uptime);
+
+        // The idle time is summed over all CPUs, so it can be larger than the uptime.
+        assert_eq!(Duration::from_secs_f64(1381406.75), uptime.all_cpu_idle_time);
+    }
 }

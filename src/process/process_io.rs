@@ -81,21 +81,9 @@ impl ProcessIO {
     }
 }
 
-/// Get the I/O counters of a specific process found by ID by reading the `/proc/PID/io` file. The file needs `CONFIG_TASK_IO_ACCOUNTING`, and reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
-///
-/// ```rust,no_run
-/// use mprober_lib::process;
-///
-/// let process_io = process::get_process_io(std::process::id()).unwrap();
-///
-/// println!("{process_io:#?}");
-/// ```
-pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
-    let io_path = proc_pid_path(pid).join("io");
-
-    let data = read_single_record_file(io_path, 256)?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+/// Parse the content of a `/proc/PID/io` file, which is one `key: value` pair per line.
+fn parse_process_io(data: &[u8]) -> Result<ProcessIO, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let mut process_io = ProcessIO::default();
 
@@ -115,4 +103,60 @@ pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
     }
 
     Ok(process_io)
+}
+
+/// Get the I/O counters of a specific process found by ID by reading the `/proc/PID/io` file. The file needs `CONFIG_TASK_IO_ACCOUNTING`, and reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned.
+///
+/// ```rust,no_run
+/// use mprober_lib::process;
+///
+/// let process_io = process::get_process_io(std::process::id()).unwrap();
+///
+/// println!("{process_io:#?}");
+/// ```
+#[inline]
+pub fn get_process_io(pid: u32) -> Result<ProcessIO, Error> {
+    parse_process_io(&read_single_record_file(proc_pid_path(pid).join("io"), 256)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const IO: &[u8] = b"rchar: 3238612
+wchar: 323177
+syscr: 2214
+syscw: 435
+read_bytes: 4096000
+write_bytes: 20480
+cancelled_write_bytes: 4096
+";
+
+    #[test]
+    fn parse() {
+        let process_io = parse_process_io(IO).unwrap();
+
+        assert_eq!(3238612, process_io.rchar);
+        assert_eq!(323177, process_io.wchar);
+        assert_eq!(2214, process_io.syscr);
+        assert_eq!(435, process_io.syscw);
+        assert_eq!(4096000, process_io.read_bytes);
+        assert_eq!(20480, process_io.write_bytes);
+        assert_eq!(4096, process_io.cancelled_write_bytes);
+    }
+
+    #[test]
+    fn compute_speed() {
+        let pre = parse_process_io(IO).unwrap();
+
+        let mut post = pre.clone();
+
+        post.read_bytes += 512;
+        post.write_bytes += 256;
+
+        let speed = pre.compute_speed(&post, Duration::from_millis(500));
+
+        assert_eq!(1024.0, speed.read);
+        assert_eq!(512.0, speed.write);
+    }
 }

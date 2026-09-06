@@ -257,4 +257,35 @@ enp131s0\t0001A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0
         assert_eq!("192.168.1.0", routes[2].destination.to_string());
         assert_eq!(24, routes[2].prefix_length);
     }
+
+    const IPV6_ROUTE: &[u8] = b"fe800000000000000000000000000000 40 00000000000000000000000000000000 00 00000000000000000000000000000000 00000100 00000001 00000000 00000001 enp131s0
+00000000000000000000000000000000 00 00000000000000000000000000000000 00 fe800000000000000a1b2c3d4e5f6071 00000400 00000001 00000000 00000003 enp131s0
+00000000000000000000000000000000 00 00000000000000000000000000000000 00 00000000000000000000000000000000 ffffffff 00000001 00000000 00200200       lo
+";
+
+    #[test]
+    fn parse_ipv6() {
+        let routes = parse_ipv6_routes(IPV6_ROUTE).unwrap();
+
+        assert_eq!(3, routes.len());
+
+        // Unlike the IPv4 file, this one writes the address bytes in order, and the prefix length in hexadecimal.
+        assert_eq!("fe80::", routes[0].destination.to_string());
+        assert_eq!(64, routes[0].prefix_length);
+        assert_eq!("enp131s0", routes[0].interface);
+        assert!(!routes[0].is_default());
+
+        // The metric is in hexadecimal here, while the IPv4 file writes it in decimal.
+        assert_eq!("::", routes[1].destination.to_string());
+        assert_eq!(0, routes[1].prefix_length);
+        assert_eq!("fe80::a1b:2c3d:4e5f:6071", routes[1].gateway.to_string());
+        assert_eq!(1024, routes[1].metric);
+        assert_eq!(0x3, routes[1].flags);
+        assert!(routes[1].is_default());
+        assert!(!routes[1].is_reject());
+
+        // The kernel keeps an unreachable fallback entry, which covers everything but carries no traffic.
+        assert!(routes[2].is_default());
+        assert!(routes[2].is_reject());
+    }
 }

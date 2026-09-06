@@ -123,20 +123,8 @@ fn read_cpu_stat(sc: &mut ScannerU8SliceAscii<'_>) -> Result<CPUStat, Error> {
     })
 }
 
-/// Get average CPU stats by reading the `/proc/stat` file.
-///
-/// ```rust
-/// use mprober_lib::cpu;
-///
-/// let average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
-///
-/// println!("{average_cpu_stat:#?}");
-/// ```
-pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
-    // The `cpu` label and its ten fields cannot fill this buffer, so reading only the head keeps the per-processor lines and the interrupt counters that follow out of it.
-    let data = read_file_head("/proc/stat", 384)?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+fn parse_average_cpu_stat(data: &[u8]) -> Result<CPUStat, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     let label = sc.next()?.or_eof()?;
 
@@ -147,19 +135,8 @@ pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
     read_cpu_stat(&mut sc)
 }
 
-/// Get all CPUs' stats with or without the average by reading the `/proc/stat` file. The stats are in the order of the `cpuN` lines, and offline CPUs are not listed, so the index is not always the CPU number.
-///
-/// ```rust
-/// use mprober_lib::cpu;
-///
-/// let all_cpus_stat = cpu::get_all_cpus_stat(false).unwrap();
-///
-/// println!("{all_cpus_stat:#?}");
-/// ```
-pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
-    let data = read_file("/proc/stat", proc_stat_capacity())?;
-
-    let mut sc = ScannerU8SliceAscii::new(&data);
+fn parse_all_cpus_stat(data: &[u8], with_average: bool) -> Result<Vec<CPUStat>, Error> {
+    let mut sc = ScannerU8SliceAscii::new(data);
 
     // One line per logical processor, which is the usual count on a machine of any size.
     let mut cpus_stat = Vec::with_capacity(16);
@@ -185,6 +162,35 @@ pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
     }
 
     Ok(cpus_stat)
+}
+
+/// Get average CPU stats by reading the `/proc/stat` file.
+///
+/// ```rust
+/// use mprober_lib::cpu;
+///
+/// let average_cpu_stat = cpu::get_average_cpu_stat().unwrap();
+///
+/// println!("{average_cpu_stat:#?}");
+/// ```
+#[inline]
+pub fn get_average_cpu_stat() -> Result<CPUStat, Error> {
+    // The `cpu` label and its ten fields cannot fill this buffer, so reading only the head keeps the per-processor lines and the interrupt counters that follow out of it.
+    parse_average_cpu_stat(&read_file_head("/proc/stat", 384)?)
+}
+
+/// Get all CPUs' stats with or without the average by reading the `/proc/stat` file. The stats are in the order of the `cpuN` lines, and offline CPUs are not listed, so the index is not always the CPU number.
+///
+/// ```rust
+/// use mprober_lib::cpu;
+///
+/// let all_cpus_stat = cpu::get_all_cpus_stat(false).unwrap();
+///
+/// println!("{all_cpus_stat:#?}");
+/// ```
+#[inline]
+pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, Error> {
+    parse_all_cpus_stat(&read_file("/proc/stat", proc_stat_capacity())?, with_average)
 }
 
 /// Calculate average CPU utilization in percentage within a specific time interval. It will cause the current thread to sleep. If the number it returns is `1.0`, means `100%`.
@@ -251,4 +257,63 @@ pub fn get_all_cpu_utilization_in_percentage(
         .collect();
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STAT: &[u8] = b"cpu  228791 17 138764 57861882 19268 0 624 1 2 3
+cpu0 9459 0 5828 2410479 850 0 116 0 0 0
+cpu1 9107 1 5710 2411431 761 0 40 0 0 0
+intr 68724016 22 1055 0 0 0
+ctxt 174031029
+";
+
+    #[test]
+    fn parse_average() {
+        let stat = parse_average_cpu_stat(STAT).unwrap();
+
+        assert_eq!(228791, stat.user);
+        assert_eq!(17, stat.nice);
+        assert_eq!(138764, stat.system);
+        assert_eq!(57861882, stat.idle);
+        assert_eq!(19268, stat.iowait);
+        assert_eq!(0, stat.irq);
+        assert_eq!(624, stat.softirq);
+        assert_eq!(1, stat.steal);
+        assert_eq!(2, stat.guest);
+        assert_eq!(3, stat.guest_nice);
+    }
+
+    #[test]
+    fn parse_all() {
+        // The `intr` line that follows the last processor must end the parsing.
+        let cpus_stat = parse_all_cpus_stat(STAT, false).unwrap();
+
+        assert_eq!(2, cpus_stat.len());
+        assert_eq!(9459, cpus_stat[0].user);
+        assert_eq!(2411431, cpus_stat[1].idle);
+
+        let cpus_stat = parse_all_cpus_stat(STAT, true).unwrap();
+
+        assert_eq!(3, cpus_stat.len());
+        assert_eq!(228791, cpus_stat[0].user);
+        assert_eq!(9459, cpus_stat[1].user);
+    }
+
+    #[test]
+    fn compute_utilization() {
+        let pre = parse_average_cpu_stat(STAT).unwrap();
+
+        let mut post = pre.clone();
+
+        post.idle += 30;
+        post.user += 10;
+
+        assert_eq!(0.25, pre.compute_cpu_utilization_in_percentage(&post));
+
+        // A counter that did not move at all means nothing ran in between.
+        assert_eq!(0.0, pre.compute_cpu_utilization_in_percentage(&pre));
+    }
 }
