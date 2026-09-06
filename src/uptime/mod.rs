@@ -4,17 +4,24 @@ use std::{
 };
 
 use chrono::prelude::*;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, utils::read_single_record_file};
 
+/// The uptime read from the `/proc/uptime` file.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Uptime {
+    /// The time since boot, including the time spent in suspend.
     pub total_uptime:      Duration,
+    /// The idle time summed over all CPUs, so it can be larger than `total_uptime`.
     pub all_cpu_idle_time: Duration,
 }
 
 impl Uptime {
-    /// Get the btime (boot time) by subtract this uptime from the current unix epoch timestamp.
+    /// Get the btime (boot time) by subtracting this uptime from the current unix epoch timestamp.
+    ///
+    /// This is computed from the moment this `Uptime` was read, so it differs by a few milliseconds from [`crate::btime::get_btime`], which is derived from the system clocks at the moment it is called.
     ///
     /// ```rust
     /// use mprober_lib::uptime;
@@ -40,8 +47,10 @@ impl Uptime {
 /// println!("{uptime:#?}");
 /// ```
 #[inline]
-pub fn get_uptime() -> Result<Uptime, ScannerError> {
-    let mut sc: ScannerAscii<_, 24> = ScannerAscii::scan_path2("/proc/uptime")?;
+pub fn get_uptime() -> Result<Uptime, Error> {
+    let data = read_single_record_file("/proc/uptime", 64)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     let uptime = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     let idle_time = sc.next_f64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;

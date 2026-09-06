@@ -1,66 +1,92 @@
-use std::str::FromStr;
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+};
 
+/// The error returned when a string is not a known process state.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ParseProcessStateError;
+
+impl Display for ParseProcessStateError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("unknown process state")
+    }
+}
+
+impl Error for ParseProcessStateError {}
+
+/// The single-character state of a process, as it appears in the `/proc/PID/stat` file.
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProcessState {
-    Running,
-    Sleeping,
-    Waiting,
-    Zombie,
-    Stopped,
-    TracingStop,
-    PagingOrWaking,
-    Dead,
-    Wakekill,
-    Parked,
+    /// The state has not been read yet, or the kernel reported a character this crate does not know.
     #[default]
+    Unknown,
+    /// `R`
+    Running,
+    /// `S`
+    Sleeping,
+    /// `D`, uninterruptible sleep
+    Waiting,
+    /// `Z`
+    Zombie,
+    /// `T`
+    Stopped,
+    /// `t`
+    TracingStop,
+    /// `X`
+    Dead,
+    /// `P`, a kernel thread that was parked
+    Parked,
+    /// `I`
     Idle,
 }
 
 impl ProcessState {
-    #[allow(clippy::should_implement_trait)]
-    #[inline]
-    pub fn from_str<S: AsRef<str>>(s: S) -> Option<ProcessState> {
-        match s.as_ref() {
-            "R" => Some(ProcessState::Running),
-            "S" => Some(ProcessState::Sleeping),
-            "D" => Some(ProcessState::Waiting),
-            "Z" => Some(ProcessState::Zombie),
-            "T" => Some(ProcessState::Stopped),
-            "t" => Some(ProcessState::TracingStop),
-            "W" => Some(ProcessState::PagingOrWaking),
-            "X" | "x" => Some(ProcessState::Dead),
-            "K" => Some(ProcessState::Wakekill),
-            "P" => Some(ProcessState::Parked),
-            "I" => Some(ProcessState::Idle),
-            _ => None,
-        }
-    }
-}
-
-impl ProcessState {
+    /// Get the name of this state, e.g. `Sleeping`.
     #[inline]
     pub fn as_str(self) -> &'static str {
         match self {
+            ProcessState::Unknown => "Unknown",
             ProcessState::Running => "Running",
             ProcessState::Sleeping => "Sleeping",
             ProcessState::Waiting => "Waiting",
             ProcessState::Zombie => "Zombie",
             ProcessState::Stopped => "Stopped",
             ProcessState::TracingStop => "TracingStop",
-            ProcessState::PagingOrWaking => "Waking",
             ProcessState::Dead => "Dead",
-            ProcessState::Wakekill => "Wakekill",
             ProcessState::Parked => "Parked",
             ProcessState::Idle => "Idle",
         }
     }
 }
 
-impl FromStr for ProcessState {
-    type Err = ();
+impl Display for ProcessState {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
+impl FromStr for ProcessState {
+    type Err = ParseProcessStateError;
+
+    /// Parse the single-character state that the `/proc/PID/stat` file reports. These are the letters of `task_state_array` in the kernel, which has not changed since Linux 4.14.
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ProcessState::from_str(s).ok_or(())
+        match s {
+            "R" => Ok(ProcessState::Running),
+            "S" => Ok(ProcessState::Sleeping),
+            "D" => Ok(ProcessState::Waiting),
+            "Z" => Ok(ProcessState::Zombie),
+            "T" => Ok(ProcessState::Stopped),
+            "t" => Ok(ProcessState::TracingStop),
+            "X" => Ok(ProcessState::Dead),
+            "P" => Ok(ProcessState::Parked),
+            "I" => Ok(ProcessState::Idle),
+            _ => Err(ParseProcessStateError),
+        }
     }
 }

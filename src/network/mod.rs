@@ -9,12 +9,17 @@ use std::{
 };
 
 pub use network_stat::*;
+use scanner_rust::ScannerU8SliceAscii;
 
-use crate::scanner_rust::{ScannerAscii, ScannerError};
+use crate::{Error, utils::read_file};
 
+/// One network interface and its counters. Two instances are equal when their interface names are equal.
 #[derive(Default, Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Network {
+    /// The name of the interface, e.g. `lo` or `eth0`.
     pub interface: String,
+    /// The counters of the interface.
     pub stat:      NetworkStat,
 }
 
@@ -41,29 +46,54 @@ impl PartialEq for Network {
 ///
 /// println!("{networks:#?}");
 /// ```
-pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
-    let mut sc: ScannerAscii<_, 1024> = ScannerAscii::scan_path2("/proc/net/dev")?;
+pub fn get_networks() -> Result<Vec<Network>, Error> {
+    let data = read_file("/proc/net/dev", 4096)?;
+
+    let mut sc = ScannerU8SliceAscii::new(&data);
 
     for _ in 0..2 {
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
-    let mut networks = Vec::with_capacity(1);
+    let mut networks = Vec::with_capacity(8);
 
-    while let Some(interface) = sc.next_until_raw(":")? {
-        let interface = unsafe { String::from_utf8_unchecked(interface) };
+    loop {
+        // Interface names are right-aligned in this file, so the padding must be skipped before reading up to the colon.
+        if !sc.skip_whitespaces()? {
+            break;
+        }
+
+        let Some(interface) = sc.next_until(":")? else {
+            break;
+        };
+
+        // The kernel only rejects `/`, `:` and whitespace in an interface name, so it may not be valid UTF-8.
+        let interface = String::from_utf8_lossy(interface).into_owned();
 
         let receive_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let receive_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-        for _ in 0..7 {
+        // fifo, frame, compressed, multicast
+        for _ in 0..4 {
             sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
         }
 
         let transmit_bytes = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_packets = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_errors = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+        let transmit_dropped = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
         let stat = NetworkStat {
             receive_bytes,
+            receive_packets,
+            receive_errors,
+            receive_dropped,
             transmit_bytes,
+            transmit_packets,
+            transmit_errors,
+            transmit_dropped,
         };
 
         let network = Network {
@@ -95,9 +125,7 @@ pub fn get_networks() -> Result<Vec<Network>, ScannerError> {
 ///     println!("    Transmit: {:.1} B/s", network_speed.transmit);
 /// }
 /// ```
-pub fn get_networks_with_speed(
-    interval: Duration,
-) -> Result<Vec<(Network, NetworkSpeed)>, ScannerError> {
+pub fn get_networks_with_speed(interval: Duration) -> Result<Vec<(Network, NetworkSpeed)>, Error> {
     let pre_networks = get_networks()?;
 
     let pre_networks_length = pre_networks.len();

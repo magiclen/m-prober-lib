@@ -15,10 +15,16 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 [dependencies]
 libc = "0.2"
 scanner-rust = "3"
-chrono = "0.4"
-regex = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"], optional = true }
 
-page_size = "0.6"
+[features]
+default = []
+serde = ["dep:serde", "chrono/serde"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
 bencher = "0.1.5"

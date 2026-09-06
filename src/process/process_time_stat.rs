@@ -1,21 +1,29 @@
-use std::{
-    io::{self, ErrorKind},
-    path::Path,
-};
+use std::io::{self, ErrorKind};
+
+use scanner_rust::ScannerU8SliceAscii;
 
 use crate::{
-    process::ProcessStat,
-    scanner_rust::{Scanner, ScannerError},
+    Error,
+    process::{
+        ProcessStat,
+        process_stat::{read_process_stat_file, split_process_stat_line},
+    },
 };
 
+/// CPU times of a process in `USER_HZ` clock ticks.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessTimeStat {
-    pub utime: u32,
-    pub stime: u32,
+    /// Time spent in user mode, in clock ticks.
+    pub utime: u64,
+    /// Time spent in kernel mode, in clock ticks.
+    pub stime: u64,
 }
 
 impl ProcessTimeStat {
     /// Compute CPU utilization in percentage between two `ProcessTimeStat` instances at different time. If it returns `1.0`, means `100%`.
+    ///
+    /// `total_cpu_time` is the total time of all CPUs, so a process using one whole core on a 4-core machine gives `0.25`.
     ///
     /// ```rust
     /// use std::{thread::sleep, time::Duration};
@@ -34,8 +42,10 @@ impl ProcessTimeStat {
     ///     let pre_average_cpu_time = pre_average_cpu_stat.compute_cpu_time();
     ///     let average_cpu_time = average_cpu_stat.compute_cpu_time();
     ///
-    ///     (average_cpu_time.get_total_time()
-    ///         - pre_average_cpu_time.get_total_time()) as f64
+    ///     average_cpu_time
+    ///         .get_total_time()
+    ///         .saturating_sub(pre_average_cpu_time.get_total_time())
+    ///         as f64
     /// };
     ///
     /// let cpu_percentage = pre_process_time_stat
@@ -52,8 +62,9 @@ impl ProcessTimeStat {
         process_time_stat_after_this: &ProcessTimeStat,
         total_cpu_time: f64,
     ) -> f64 {
-        let d_utime = process_time_stat_after_this.utime - self.utime;
-        let d_stime = process_time_stat_after_this.stime - self.stime;
+        // The PID may have been reused by a new process, so the counters can go backwards.
+        let d_utime = process_time_stat_after_this.utime.saturating_sub(self.utime);
+        let d_stime = process_time_stat_after_this.stime.saturating_sub(self.stime);
         let d_time_f64 = (d_utime + d_stime) as f64;
 
         if total_cpu_time < 1.0 {
@@ -75,6 +86,24 @@ impl From<ProcessStat> for ProcessTimeStat {
     }
 }
 
+fn parse_process_time_stat(line: &[u8]) -> Result<ProcessTimeStat, Error> {
+    let (_, fields) = split_process_stat_line(line)?;
+
+    let mut sc = ScannerU8SliceAscii::new(fields);
+
+    for _ in 0..11 {
+        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    }
+
+    let utime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    let stime = sc.next_u64()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+
+    Ok(ProcessTimeStat {
+        utime,
+        stime,
+    })
+}
+
 /// Get the time stat of a specific process found by ID by reading the `/proc/PID/stat` file.
 ///
 /// ```rust
@@ -84,32 +113,23 @@ impl From<ProcessStat> for ProcessTimeStat {
 ///
 /// println!("{process_time_stat:#?}");
 /// ```
-pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, ScannerError> {
-    let stat_path = Path::new("/proc").join(pid.to_string()).join("stat");
+#[inline]
+pub fn get_process_time_stat(pid: u32) -> Result<ProcessTimeStat, Error> {
+    let line = read_process_stat_file(pid)?;
 
-    let mut sc: Scanner<_, 96> = Scanner::scan_path2(stat_path)?;
+    parse_process_time_stat(&line)
+}
 
-    sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::process_stat::tests::STAT_LINE;
 
-    loop {
-        let comm = sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
+    #[test]
+    fn parse_time_stat_line() {
+        let time_stat = parse_process_time_stat(STAT_LINE).unwrap();
 
-        if comm.ends_with(b")") {
-            break;
-        }
+        assert_eq!(26, time_stat.utime);
+        assert_eq!(45, time_stat.stime);
     }
-
-    for _ in 0..11 {
-        sc.drop_next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    }
-
-    let utime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-    let stime = sc.next_u32()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
-
-    let time_stat = ProcessTimeStat {
-        utime,
-        stime,
-    };
-
-    Ok(time_stat)
 }

@@ -28,21 +28,37 @@ cargo bench
 ```
 */
 
-pub extern crate scanner_rust;
+#[cfg(not(target_os = "linux"))]
+compile_error!("mprober-lib reads the `/proc` and `/sys` file systems, so it only supports Linux.");
 
+mod error;
 mod functions;
+mod utils;
 
+/// The boot time of the system.
 pub mod btime;
+/// CPU models, topology, frequencies, per-CPU time counters and system-wide scheduler counters.
 pub mod cpu;
+/// The hostname of the system.
 pub mod hostname;
+/// The kernel version, the `uname` fields, the file handle usage, the boot parameters and the taint flags.
 pub mod kernel;
+/// The load average.
 pub mod load_average;
+/// Memory and swap usage, like the `free` command, the paging counters of the `vmstat` command, the swap areas and the NUMA nodes.
 pub mod memory;
+/// Network interfaces, their counters, their link information, their IP addresses, the protocol counters, the sockets and the routing table.
 pub mod network;
+/// Running processes, their stats, their memory, their threads and their I/O counters.
 pub mod process;
+/// PSI (Pressure Stall Information) for CPU, memory and I/O.
+pub mod pressure;
+/// The datetime of the hardware real time clock.
 pub mod rtc_time;
+/// The time since the system booted.
 pub mod uptime;
+/// Block devices, their attributes, their mounts, their sizes and their I/O counters.
 pub mod volume;
 
+pub use error::*;
 pub use functions::*;
-pub use scanner_rust::ScannerError;

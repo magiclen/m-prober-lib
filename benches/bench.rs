@@ -70,10 +70,6 @@ fn get_uptime(bencher: &mut Bencher) {
     bencher.iter(|| uptime::get_uptime().unwrap());
 }
 
-fn get_mounts(bencher: &mut Bencher) {
-    bencher.iter(|| volume::get_mounts().unwrap());
-}
-
 benchmark_group!(btime, get_btime);
 
 benchmark_group!(
@@ -97,7 +93,6 @@ benchmark_group!(
 );
 benchmark_group!(rtc_time, get_rtc_date_time);
 benchmark_group!(uptime, get_uptime);
-benchmark_group!(volume, get_mounts);
 
 benchmark_main!(
     btime,
@@ -109,6 +104,5 @@ benchmark_main!(
     network,
     process,
     rtc_time,
-    uptime,
-    volume
+    uptime
 );

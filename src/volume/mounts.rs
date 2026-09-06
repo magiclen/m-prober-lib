@@ -1,60 +1,126 @@
 use std::{
     collections::HashMap,
+    fs,
     io::{self, ErrorKind},
-    path::Path,
-    str::from_utf8_unchecked,
+    os::unix::fs::MetadataExt,
 };
 
-use crate::scanner_rust::{Scanner, ScannerError};
+use scanner_rust::ScannerU8SliceAscii;
 
-/// Get mounting points of all block devices by reading the `/proc/mounts` file.
-///
-/// ```rust
-/// use mprober_lib::volume;
-///
-/// let mounts = volume::get_mounts().unwrap();
-///
-/// println!("{mounts:#?}");
-/// ```
-pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
-    let mut sc: Scanner<_, 1024> = Scanner::scan_path2("/proc/mounts")?;
+use crate::{
+    Error,
+    utils::{read_file, unescape_octal},
+};
 
-    let mut mounts: HashMap<String, Vec<String>> = HashMap::with_capacity(1);
+/// The mount points of one block device, read from the `/proc/mounts` file. [`crate::volume::MountInfo`] is the public superset of this, so this only feeds [`get_volumes`](crate::volume::get_volumes).
+#[derive(Default, Debug, Clone)]
+pub(crate) struct Mount {
+    /// The file system type, e.g. `ext4` or `btrfs`.
+    pub fs_type: String,
+    /// Every path this device is mounted at, in the order of the `/proc/mounts` file.
+    pub points:  Vec<String>,
+}
 
-    while let Some(device_path) = sc.next_raw()? {
+/// Parse the lines of `/proc/mounts` whose source starts with `/dev/`. Each entry is the device path, the mount point and the file system type.
+fn parse_mounts(data: &[u8]) -> Result<Vec<(String, String, String)>, Error> {
+    // Only ASCII whitespace separates the fields, because the kernel escapes it inside the fields as octal sequences.
+    let mut sc = ScannerU8SliceAscii::new(data);
+
+    let mut entries = Vec::with_capacity(8);
+
+    while let Some(device_path) = sc.next()? {
         if device_path.starts_with(b"/dev/") {
-            let device = {
-                let device = &device_path[5..];
+            let device_path = String::from_utf8_lossy(&unescape_octal(device_path)).into_owned();
 
-                if device.starts_with(b"mapper/") {
-                    let device_path =
-                        Path::new(unsafe { from_utf8_unchecked(device_path.as_ref()) })
-                            .canonicalize()?;
+            let point = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-                    device_path.file_name().unwrap().to_string_lossy().into_owned()
-                } else {
-                    unsafe { from_utf8_unchecked(device) }.to_string()
-                }
-            };
+            // A mount point containing a space is written as `\040` in this file.
+            let point = String::from_utf8_lossy(&unescape_octal(point)).into_owned();
 
-            let point = unsafe {
-                String::from_utf8_unchecked(
-                    sc.next_raw()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?,
-                )
-            };
+            let fs_type = sc.next()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
 
-            match mounts.get_mut(&device) {
-                Some(devices) => {
-                    devices.push(point);
-                },
-                None => {
-                    mounts.insert(device, vec![point]);
-                },
-            }
+            let fs_type = String::from_utf8_lossy(fs_type).into_owned();
+
+            entries.push((device_path, point, fs_type));
         }
 
         sc.drop_next_line()?.ok_or(io::Error::from(ErrorKind::UnexpectedEof))?;
     }
 
+    Ok(entries)
+}
+
+/// Look up the name the kernel gives a block device in sysfs, which is the name `/proc/diskstats` uses.
+fn device_name_by_number(device_path: &str) -> Option<String> {
+    // The metadata is followed through symlinks, so `/dev/mapper/*` and `/dev/disk/by-uuid/*` need no separate `realpath` call.
+    let rdev = fs::metadata(device_path).ok()?.rdev();
+
+    let major = libc::major(rdev);
+    let minor = libc::minor(rdev);
+
+    fs::read_link(format!("/sys/dev/block/{major}:{minor}"))
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+}
+
+/// Resolve a device path from `/proc/mounts` to the device name used in `/proc/diskstats`.
+fn resolve_device_name(device_path: &str) -> String {
+    if let Some(name) = device_name_by_number(device_path) {
+        return name;
+    }
+
+    // Without sysfs, or for a device node that does not exist in this mount namespace, the last path component is the best guess.
+    let name = device_path.rsplit('/').next().unwrap_or(device_path);
+
+    name.to_string()
+}
+
+/// Get mounting points of all block devices by reading the `/proc/mounts` file. The keys are device names as they appear in `/proc/diskstats`.
+pub(crate) fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
+    let entries = parse_mounts(&read_file("/proc/mounts", 8192)?)?;
+
+    let mut mounts: HashMap<String, Mount> = HashMap::with_capacity(entries.len());
+
+    for (device_path, point, fs_type) in entries {
+        let mount = mounts.entry(resolve_device_name(&device_path)).or_default();
+
+        if mount.points.is_empty() {
+            mount.fs_type = fs_type;
+        }
+
+        mount.points.push(point);
+    }
+
     Ok(mounts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MOUNTS: &[u8] = b"sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+/dev/nvme0n1p4 / btrfs rw,relatime,ssd,subvol=/@ 0 0
+/dev/nvme0n1p4 /home btrfs rw,relatime,ssd,subvol=/@home 0 0
+/dev/sda1 /media/user/my\\040disk ext4 rw,relatime 0 0
+/dev/sdb1 /media/user/\xe6\x88\x91\xe7\x9a\x84\xe3\x80\x80\xe7\xa3\x81\xe7\xa2\x9f vfat rw 0 0
+tmpfs /run tmpfs rw,nosuid,nodev 0 0
+";
+
+    #[test]
+    fn parse() {
+        let entries = parse_mounts(MOUNTS).unwrap();
+
+        assert_eq!(4, entries.len());
+
+        assert_eq!(
+            ("/dev/nvme0n1p4".to_string(), "/".to_string(), "btrfs".to_string()),
+            entries[0]
+        );
+        assert_eq!("/home", entries[1].1);
+        assert_eq!("/media/user/my disk", entries[2].1);
+
+        // U+3000 is a Unicode whitespace, but the kernel does not escape it, so it must not split the fields.
+        assert_eq!("/media/user/我的\u{3000}磁碟", entries[3].1);
+        assert_eq!("vfat", entries[3].2);
+    }
 }
