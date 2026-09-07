@@ -109,6 +109,8 @@ cargo bench
 ```
 */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 #[cfg(not(target_os = "linux"))]
 compile_error!("mprober-lib reads the `/proc` and `/sys` file systems, so it only supports Linux.");
 
