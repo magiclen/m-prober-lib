@@ -52,7 +52,7 @@ pub struct ProcessStat {
     pub num_threads:  usize,
     /// The time the process started after system boot, in clock ticks.
     pub starttime:    u64,
-    /// The virtual memory size in bytes (`size` in `statm`, `VmSize`).
+    /// The virtual memory size in bytes, read from the `stat` file. It is the same as `VmSize`.
     pub vsize:        u64,
     /// The resident set size in bytes (`resident` in `statm`, `VmRSS`).
     pub rss:          u64,

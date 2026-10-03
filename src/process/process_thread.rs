@@ -37,7 +37,7 @@ pub fn get_process_thread_ids(pid: u32) -> Result<Vec<u32>, Error> {
 
 /// Get the stat of one thread of a specific process by reading the `/proc/PID/task/TID/stat` file. The file has the same format as the one of a process, so the fields mean the same, except that they describe the thread alone.
 ///
-/// The memory fields are not filled in, because every thread of a process shares the same address space; read them from the process with [`crate::process::get_process_stat`] instead.
+/// Every thread of a process shares the same address space, so `vsize` and `rsslim` are those of the whole process, while `rss`, `shared` and `rss_anon` are not filled in; read them from the process with [`crate::process::get_process_stat`] instead.
 ///
 /// ```rust,no_run
 /// use mprober_lib::process;
@@ -58,7 +58,7 @@ pub fn get_thread_stat(pid: u32, tid: u32) -> Result<ProcessStat, Error> {
 
 /// Get the stat of every thread of a specific process found by ID by reading the files in the `/proc/PID/task` folder. A thread that exits during the scan is skipped, so the result can be shorter than the `num_threads` field of the process.
 ///
-/// As in [`get_thread_stat`], the memory fields of each [`crate::process::ProcessStat`] are left at `0`, because a thread has no address space of its own.
+/// As in [`get_thread_stat`], `rss`, `shared` and `rss_anon` of each [`crate::process::ProcessStat`] are left at `0`, because a thread has no address space of its own.
 ///
 /// ```rust
 /// use mprober_lib::process;

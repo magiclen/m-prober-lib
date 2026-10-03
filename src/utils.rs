@@ -164,6 +164,15 @@ pub(crate) fn is_single_path_component(name: &str) -> bool {
 
 // Every text file of `/proc` and `/sys` is read into a buffer by one of the two functions below and then parsed with a `ScannerU8SliceAscii`, whose tokens borrow from that buffer instead of being allocated one by one. Splitting bytes by hand is only kept where the input is not a series of whitespace-separated tokens, e.g. `unescape_octal`, `parse_cpu_list` and the hexadecimal addresses of the socket files.
 
+/// Read the rest of a file to its end, appending to `buffer`.
+/// `File::read_to_end` first asks for the size and the position of the file, which costs two syscalls that tell nothing about a `/proc` or `/sys` file, whose size is always `0`. Reading through `Take` uses the generic loop of `Read::read_to_end` instead, which skips them and still reads into the spare capacity without zeroing it.
+#[inline]
+fn read_to_end(file: &mut File, buffer: &mut Vec<u8>) -> io::Result<()> {
+    Read::take(file, u64::MAX).read_to_end(buffer)?;
+
+    Ok(())
+}
+
 /// Read a whole file into a `Vec` with a pre-allocated capacity. Multi-record files in `/proc` (e.g. `/proc/cpuinfo`) return at most one page per read, so this reads until EOF.
 #[inline]
 pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<Vec<u8>> {
@@ -171,7 +180,7 @@ pub(crate) fn read_file<P: AsRef<Path>>(path: P, capacity: usize) -> io::Result<
 
     let mut buffer = Vec::with_capacity(capacity);
 
-    file.read_to_end(&mut buffer)?;
+    read_to_end(&mut file, &mut buffer)?;
 
     Ok(buffer)
 }
@@ -219,7 +228,7 @@ pub(crate) fn read_single_record_file_into<P: AsRef<Path>>(
 
     if size == capacity {
         // The record may be larger than the buffer, so the rest is read in the usual way.
-        file.read_to_end(buffer)?;
+        read_to_end(&mut file, buffer)?;
     } else {
         buffer.truncate(size);
     }
@@ -305,5 +314,14 @@ mod tests {
 
         // A field without a backslash is borrowed instead of copied.
         assert!(matches!(unescape_octal(b"/mnt/plain"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn read_files_larger_than_the_capacity() {
+        // The buffer has to grow until the whole file is read.
+        let expected = fs::read("Cargo.toml").unwrap();
+
+        assert_eq!(expected, read_file("Cargo.toml", 16).unwrap());
+        assert_eq!(expected, read_single_record_file("Cargo.toml", 16).unwrap());
     }
 }

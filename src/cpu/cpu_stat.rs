@@ -81,11 +81,7 @@ impl CPUStat {
     /// ```
     #[inline]
     pub fn compute_cpu_utilization_in_percentage(&self, cpu_stat_after_this: &CPUStat) -> f64 {
-        let pre_cpu_time = self.compute_cpu_time();
-        let cpu_time = cpu_stat_after_this.compute_cpu_time();
-
-        let d_total = cpu_time.get_total_time().saturating_sub(pre_cpu_time.get_total_time());
-        let d_non_idle = cpu_time.non_idle.saturating_sub(pre_cpu_time.non_idle);
+        let (d_non_idle, d_total) = compute_elapsed_cpu_time(self, cpu_stat_after_this);
 
         if d_total == 0 {
             return 0.0;
@@ -93,6 +89,19 @@ impl CPUStat {
 
         d_non_idle as f64 / d_total as f64
     }
+}
+
+/// Compute the non-idle time and the total time that passed between two `CPUStat` instances.
+/// `proc(5)` warns that the iowait counter can go backwards, so the idle part and the non-idle part are subtracted on their own. Subtracting the totals instead would let a smaller iowait shrink the total, and the non-idle share could go above `1.0`.
+#[inline]
+pub(crate) fn compute_elapsed_cpu_time(pre: &CPUStat, post: &CPUStat) -> (u64, u64) {
+    let pre_cpu_time = pre.compute_cpu_time();
+    let cpu_time = post.compute_cpu_time();
+
+    let d_non_idle = cpu_time.non_idle.saturating_sub(pre_cpu_time.non_idle);
+    let d_idle = cpu_time.idle.saturating_sub(pre_cpu_time.idle);
+
+    (d_non_idle, d_non_idle + d_idle)
 }
 
 /// Read the ten time fields that follow a `cpu` label in `/proc/stat`.
@@ -315,5 +324,13 @@ ctxt 174031029
 
         // A counter that did not move at all means nothing ran in between.
         assert_eq!(0.0, pre.compute_cpu_utilization_in_percentage(&pre));
+
+        // A smaller iowait must not shrink the total, which would push the result above `1.0`.
+        let mut post = pre.clone();
+
+        post.iowait -= 5;
+        post.user += 10;
+
+        assert_eq!(1.0, pre.compute_cpu_utilization_in_percentage(&post));
     }
 }

@@ -79,7 +79,8 @@ fn resolve_cgroup_path(cgroup_path: &str) -> PathBuf {
     let direct = Path::new("/sys/fs/cgroup").join(cgroup_path);
 
     // On a host the cgroup file system is mounted at its own root, so the path is directly below the usual mount point. Checking that with one `stat` keeps the mount table out of the common case.
-    if direct.exists() {
+    // The check looks for `cgroup.controllers`, which every cgroup v2 folder has, because on a host that mixes v1 and v2 the usual mount point is a tmpfs of v1 controllers, and the v2 root is mounted somewhere else (e.g. `/sys/fs/cgroup/unified`).
+    if direct.join("cgroup.controllers").exists() {
         return direct;
     }
 
@@ -156,7 +157,7 @@ fn read_limit<P: AsRef<Path>>(path: P) -> Result<Option<u64>, Error> {
 pub struct CgroupMemory {
     /// The memory used by the cgroup and its descendants in bytes (`memory.current`).
     pub current:      u64,
-    /// The highest memory usage recorded in bytes (`memory.peak`). It is `None` on kernels older than 6.8.
+    /// The highest memory usage recorded in bytes (`memory.peak`). It is `None` on kernels older than 5.19.
     pub peak:         Option<u64>,
     /// The hard memory limit in bytes (`memory.max`). It is `None` when there is no limit.
     pub max:          Option<u64>,
@@ -168,7 +169,7 @@ pub struct CgroupMemory {
     pub min:          Option<u64>,
     /// The swap used by the cgroup and its descendants in bytes (`memory.swap.current`). It is `None` when swap accounting is disabled, which is not the same as no swap being used.
     pub swap_current: Option<u64>,
-    /// The hard swap limit in bytes (`memory.swap.max`). It is `None` when there is no limit.
+    /// The hard swap limit in bytes (`memory.swap.max`). It is `None` when there is no limit, and also when swap accounting is disabled, which `swap_current` being `None` tells apart.
     pub swap_max:     Option<u64>,
 }
 
@@ -188,7 +189,7 @@ pub fn get_cgroup_memory<P: AsRef<Path>>(path: P) -> Result<CgroupMemory, Error>
     let current = read_sysfs_number(path.join("memory.current"))?;
     let max = read_limit(path.join("memory.max"))?;
 
-    // `memory.peak` exists since Linux 6.8.
+    // `memory.peak` exists since Linux 5.19.
     let peak = read_sysfs_number(path.join("memory.peak")).ok();
 
     // A protection file holds `max` when everything is protected, which the limit files spell the same way.
@@ -281,7 +282,7 @@ pub struct CgroupMemoryStat {
     pub kernel:             Option<u64>,
     /// The memory of the kernel stacks of the tasks (`kernel_stack`).
     pub kernel_stack:       u64,
-    /// The memory of the page tables (`pagetables`). It is `None` on kernels older than 5.13.
+    /// The memory of the page tables (`pagetables`). It is `None` on kernels older than 5.11.
     pub pagetables:         Option<u64>,
     /// The memory the per-CPU allocator uses (`percpu`).
     pub percpu:             u64,
@@ -872,7 +873,7 @@ pgmajfault 67
         assert_eq!(12345, stat.page_faults);
         assert_eq!(67, stat.major_page_faults);
 
-        // A kernel older than 5.13 reports neither the page tables nor the kernel total.
+        // A kernel older than 5.11 reports neither the page tables nor the kernel total.
         let stat = parse_memory_stat(b"anon 4096\nfile 8192\nkernel_stack 0\n").unwrap();
 
         assert_eq!(4096, stat.anon);

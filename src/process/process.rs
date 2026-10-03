@@ -12,7 +12,7 @@ use chrono::prelude::*;
 use crate::{
     Error,
     btime::get_btime,
-    cpu::get_average_cpu_stat,
+    cpu::{compute_elapsed_cpu_time, get_average_cpu_stat},
     process::{
         ProcessFilter, ProcessStat, ProcessState, ProcessTimeStat, get_process_time_stat,
         process_stat::{
@@ -85,14 +85,6 @@ impl PartialEq for Process {
     }
 }
 
-// This enum is short-lived, so boxing the matched process would only add an allocation per process.
-#[allow(clippy::large_enum_variant)]
-enum ProcessProbe {
-    Matched(Process, ProcessStat),
-    /// The parent PID is only looked up when a PID filter needs it for finding descendants.
-    Filtered(Option<u32>),
-}
-
 /// Convert the content of `/proc/PID/cmdline` to a string with the arguments separated by spaces.
 fn cmdline_to_string(data: &[u8]) -> String {
     // Every argument ends with a NUL, so the last one is dropped instead of becoming a trailing space.
@@ -140,7 +132,7 @@ fn get_process_with_stat_inner(
     btime: DateTime<Utc>,
     tty_cache: &mut TtyCache,
     buffer: &mut Vec<u8>,
-) -> Result<ProcessProbe, Error> {
+) -> Result<Option<(Process, ProcessStat)>, Error> {
     // Only the IDs and the swap size are used here, and both come before the `Threads:` line.
     let status = read_process_status(process_path, true, buffer)?;
 
@@ -158,13 +150,8 @@ fn get_process_with_stat_inner(
             && status.fs_gid != gid_filter
     });
 
-    // The parent PID is only recorded when a PID filter needs it for finding descendants.
-    let record_ppid = process_filter.pid_filter.is_some();
-
     if uid_filtered || gid_filtered {
-        let ppid = if record_ppid { Some(get_process_ppid(process_path, buffer)?) } else { None };
-
-        return Ok(ProcessProbe::Filtered(ppid));
+        return Ok(None);
     }
 
     // The kernel writes the whole command line in one record, and a longer one is still read completely.
@@ -182,7 +169,7 @@ fn get_process_with_stat_inner(
         && let Some(program_filter) = process_filter.program_filter
         && !program_filter(&stat.comm)
     {
-        return Ok(ProcessProbe::Filtered(record_ppid.then_some(stat.ppid)));
+        return Ok(None);
     }
 
     let effective_uid = status.effective_uid;
@@ -201,10 +188,10 @@ fn get_process_with_stat_inner(
         match tty.as_ref() {
             Some(tty) => {
                 if !tty_filter(tty) {
-                    return Ok(ProcessProbe::Filtered(record_ppid.then_some(ppid)));
+                    return Ok(None);
                 }
             },
-            None => return Ok(ProcessProbe::Filtered(record_ppid.then_some(ppid))),
+            None => return Ok(None),
         }
     }
 
@@ -248,7 +235,7 @@ fn get_process_with_stat_inner(
         start_time,
     };
 
-    Ok(ProcessProbe::Matched(process, stat))
+    Ok(Some((process, stat)))
 }
 
 /// Get information of a specific process found by ID by reading files in the `/proc/PID` folder.
@@ -276,12 +263,12 @@ pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), Error> 
         &mut tty_cache,
         &mut buffer,
     )? {
-        ProcessProbe::Matched(process, stat) => Ok((process, stat)),
-        ProcessProbe::Filtered(_) => unreachable!("the default filter matches every process"),
+        Some(process_with_stat) => Ok(process_with_stat),
+        None => unreachable!("the default filter matches every process"),
     }
 }
 
-/// Get the current working directory of a specific process found by ID by reading the `/proc/PID/cwd` link. Reading the link of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned, and a kernel thread has none, so a `NotFound` error is returned for one.
+/// Get the current working directory of a specific process found by ID by reading the `/proc/PID/cwd` link. Reading the link of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned. A kernel thread shares the working directory of the kernel, which is normally `/`, while a zombie process has none any more, so a `NotFound` error is returned for one.
 ///
 /// ```rust
 /// use mprober_lib::process;
@@ -342,63 +329,75 @@ fn is_process_or_descendant(pid: u32, ancestor: u32, pid_ppid_map: &BTreeMap<u32
 pub fn get_processes_with_stat(
     process_filter: &ProcessFilter,
 ) -> Result<Vec<(Process, ProcessStat)>, Error> {
-    let mut processes_with_stat = Vec::new();
+    // Every file of every process is read into this one buffer, which keeps the scan from allocating and zeroing a new one for each of them.
+    let mut buffer = Vec::new();
 
-    // Every scanned process is recorded here (even the filtered ones), so descendants can be found no matter the scanning order.
-    let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
+    let pids = match process_filter.pid_filter {
+        Some(pid_filter) => find_process_and_descendants(pid_filter, &mut buffer)?,
+        None => read_pids()?,
+    };
+
+    let mut processes_with_stat = Vec::with_capacity(pids.len());
 
     // The boot time is computed once, so every process in this scan uses the same value.
     let btime = get_btime();
 
     let mut tty_cache = TtyCache::new();
 
-    // Every file of every process is read into this one buffer, which keeps the scan from allocating and zeroing a new one for each of them.
-    let mut buffer = Vec::new();
-
-    for dir_entry in Path::new("/proc").read_dir()? {
-        let dir_entry = dir_entry?;
-
-        let Some(pid) = dir_entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
-            continue;
-        };
-
+    for pid in pids {
         match get_process_with_stat_inner(
             pid,
-            &dir_entry.path(),
+            &proc_pid_path(pid),
             process_filter,
             btime,
             &mut tty_cache,
             &mut buffer,
         ) {
-            Ok(ProcessProbe::Matched(process, stat)) => {
-                if process_filter.pid_filter.is_some() {
-                    pid_ppid_map.insert(pid, process.ppid);
-                }
-
-                processes_with_stat.push((process, stat));
-            },
-            Ok(ProcessProbe::Filtered(ppid)) => {
-                if let Some(ppid) = ppid {
-                    pid_ppid_map.insert(pid, ppid);
-                }
-            },
-            Err(err) => {
-                if is_process_unreadable(&err) {
-                    continue;
-                }
-
-                return Err(err);
-            },
+            Ok(Some(process_with_stat)) => processes_with_stat.push(process_with_stat),
+            Ok(None) => (),
+            Err(err) if is_process_unreadable(&err) => (),
+            Err(err) => return Err(err),
         }
     }
 
-    if let Some(pid_filter) = process_filter.pid_filter {
-        processes_with_stat.retain(|(process, _)| {
-            is_process_or_descendant(process.pid, pid_filter, &pid_ppid_map)
-        });
+    Ok(processes_with_stat)
+}
+
+/// List the PIDs of every process, in the order of the `/proc` folder.
+fn read_pids() -> Result<Vec<u32>, Error> {
+    let mut pids = Vec::new();
+
+    for dir_entry in Path::new("/proc").read_dir()? {
+        let dir_entry = dir_entry?;
+
+        if let Some(pid) = dir_entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) {
+            pids.push(pid);
+        }
     }
 
-    Ok(processes_with_stat)
+    Ok(pids)
+}
+
+/// Find `ancestor` and all of its descendants, in the order of their PIDs. Only the `stat` file of every process is read for this, so a PID filter does not pay for the other files of the processes it drops.
+fn find_process_and_descendants(ancestor: u32, buffer: &mut Vec<u8>) -> Result<Vec<u32>, Error> {
+    // Every process is recorded here before any of them is checked, so descendants are found no matter the scanning order.
+    let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
+
+    for pid in read_pids()? {
+        match get_process_ppid(&proc_pid_path(pid), buffer) {
+            Ok(ppid) => {
+                pid_ppid_map.insert(pid, ppid);
+            },
+            Err(err) if is_process_unreadable(&err) => (),
+            Err(err) => return Err(err),
+        }
+    }
+
+    Ok(pid_ppid_map
+        .keys()
+        .copied()
+        .filter(|&pid| is_process_or_descendant(pid, ancestor, &pid_ppid_map))
+        .collect())
 }
 
 /// Get process information by reading files in the `/proc/PID` folders and measure the cpu utilization in percentage within a specific time interval. If the number it returns is `1.0`, means `100%`.
@@ -434,13 +433,9 @@ pub fn get_processes_with_cpu_utilization_in_percentage(
 
     let average_cpu_stat = get_average_cpu_stat()?;
 
-    let total_cpu_time_f64 = {
-        let pre_average_cpu_time = pre_average_cpu_stat.compute_cpu_time();
-        let average_cpu_time = average_cpu_stat.compute_cpu_time();
+    let (_, total_cpu_time) = compute_elapsed_cpu_time(&pre_average_cpu_stat, &average_cpu_stat);
 
-        average_cpu_time.get_total_time().saturating_sub(pre_average_cpu_time.get_total_time())
-            as f64
-    };
+    let total_cpu_time_f64 = total_cpu_time as f64;
 
     for (process, pre_process_stat) in processes_with_stat {
         if let Ok(process_time_stat) = get_process_time_stat(process.pid) {
@@ -475,5 +470,24 @@ mod tests {
 
         assert!(!stat.comm.is_empty());
         assert_eq!(process.program, stat.comm);
+    }
+
+    #[test]
+    fn pid_filter_keeps_the_process_and_its_descendants() {
+        let pid = std::process::id();
+
+        let filter = ProcessFilter {
+            pid_filter: Some(pid),
+            ..ProcessFilter::default()
+        };
+
+        let pids: Vec<u32> = get_processes_with_stat(&filter)
+            .unwrap()
+            .into_iter()
+            .map(|(process, _)| process.pid)
+            .collect();
+
+        // The test process starts no child process, so it is the only one left.
+        assert_eq!(vec![pid], pids);
     }
 }

@@ -102,7 +102,7 @@ pub fn get_kernel_version() -> Result<String, Error> {
     Ok(utsname_field_to_string(&buffer.release))
 }
 
-/// Get the highest PID the kernel assigns before wrapping around, by reading the `/proc/sys/kernel/pid_max` file. It is also the number of processes the system can have at most.
+/// Get the highest PID the kernel assigns before wrapping around, by reading the `/proc/sys/kernel/pid_max` file. Every process and every thread takes a PID below it, so it also caps how many of them can exist at the same time.
 ///
 /// ```rust
 /// use mprober_lib::kernel;

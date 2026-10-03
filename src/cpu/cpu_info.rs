@@ -194,7 +194,7 @@ fn parse_cpuinfo(data: &[u8]) -> Result<CPUInfo, Error> {
     })
 }
 
-/// Rebuild the packages from the sysfs topology, which is the only source on a platform whose `/proc/cpuinfo` reports no `physical id`. The model name and the frequencies of the single package the parsing produced are spread over the real packages.
+/// Rebuild the packages from the sysfs topology, which is the only source on a platform whose `/proc/cpuinfo` reports no `physical id`. The model name of the single package the parsing produced is copied to the real packages, while their frequencies are left empty for `get_cpus` to read from cpufreq.
 fn regroup_by_sysfs_topology(cpus: &[(CPU, Vec<usize>)]) -> Option<Vec<(CPU, Vec<usize>)>> {
     let packages = package_topology()?;
 

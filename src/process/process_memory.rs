@@ -97,7 +97,7 @@ fn parse_process_memory(data: &[u8]) -> Result<ProcessMemory, Error> {
 
 /// Get the memory of a specific process found by ID by reading the `/proc/PID/smaps_rollup` file. Unlike the `rss` of [`crate::process::ProcessStat`], which counts a shared page in full for every process that maps it, the `pss` this reports splits a shared page between them, so adding it up over every process stays within the physical memory.
 ///
-/// The kernel sums the file over every mapping of the process, which costs more than reading `/proc/PID/statm`, but far less than reading the whole `/proc/PID/smaps` file. Reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned, and a kernel thread has no mappings at all, so a `NotFound` error is returned for one.
+/// The kernel sums the file over every mapping of the process, which costs more than reading `/proc/PID/statm`, but far less than reading the whole `/proc/PID/smaps` file. Reading the file of a process owned by another user needs the `CAP_SYS_PTRACE` capability, otherwise a `PermissionDenied` error is returned. A kernel thread or a zombie process has no address space, so the kernel answers with `ESRCH` instead, which is not a `NotFound` error; check `raw_os_error()` for `libc::ESRCH` to tell it apart.
 ///
 /// ```rust,no_run
 /// use mprober_lib::process;

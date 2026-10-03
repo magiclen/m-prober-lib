@@ -47,19 +47,22 @@ fn parse_mounts(data: &[u8]) -> Result<Vec<(String, String, String)>, Error> {
 }
 
 /// Look up the name the kernel gives a block device in sysfs, which is the name `/proc/diskstats` uses.
-fn device_name_by_number(device_path: &str) -> Option<String> {
-    // The metadata is followed through symlinks, so `/dev/mapper/*` and `/dev/disk/by-uuid/*` need no separate `realpath` call.
-    let rdev = fs::metadata(device_path).ok()?.rdev();
-
-    let major = libc::major(rdev);
-    let minor = libc::minor(rdev);
+fn device_name_by_dev(dev: u64) -> Option<String> {
+    let major = libc::major(dev);
+    let minor = libc::minor(dev);
 
     read_link_name(format!("/sys/dev/block/{major}:{minor}"))
 }
 
 /// Resolve a device path from `/proc/mounts` to the device name used in `/proc/diskstats`.
-fn resolve_device_name(device_path: &str) -> String {
-    if let Some(name) = device_name_by_number(device_path) {
+fn resolve_device_name(device_path: &str, point: &str) -> String {
+    // The metadata is followed through symlinks, so `/dev/mapper/*` and `/dev/disk/by-uuid/*` need no separate `realpath` call.
+    if let Some(name) = fs::metadata(device_path).ok().and_then(|m| device_name_by_dev(m.rdev())) {
+        return name;
+    }
+
+    // A system booted without an initramfs mounts its root file system as `/dev/root`, a node that no longer exists afterwards, so the device of the mounted file system is asked instead. A file system without a block device of its own (e.g. btrfs) has an anonymous number that sysfs does not list.
+    if let Some(name) = fs::metadata(point).ok().and_then(|m| device_name_by_dev(m.dev())) {
         return name;
     }
 
@@ -81,7 +84,7 @@ pub(crate) fn get_mounts() -> Result<HashMap<String, Mount>, Error> {
     for (device_path, point, fs_type) in entries {
         let device = resolved
             .entry(device_path)
-            .or_insert_with_key(|path| resolve_device_name(path))
+            .or_insert_with_key(|path| resolve_device_name(path, &point))
             .clone();
 
         let mount = mounts.entry(device).or_default();

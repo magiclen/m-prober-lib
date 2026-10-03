@@ -7,7 +7,7 @@ use crate::{
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessOOM {
-    /// The badness score the OOM killer computes, from `0` to `1000`. The process with the highest one is killed first.
+    /// The badness score the OOM killer computes, from `0` to `2000`. The process with the highest one is killed first. Since Linux 5.9 the kernel scales it so that a process without an adjustment scores at least `666`.
     pub score:     u32,
     /// The adjustment an administrator set, from `-1000` to `1000`. It is added to the score, and `-1000` makes the process immune.
     pub score_adj: i32,
